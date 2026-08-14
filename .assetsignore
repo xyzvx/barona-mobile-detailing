@@ -1,0 +1,7 @@
+.git
+.git/**
+.wrangler
+.wrangler/**
+*.zip
+README.md
+Website Build Notes*.md
