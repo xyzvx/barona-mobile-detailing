@@ -28,9 +28,14 @@ const SERVICE_META = {
   unsure: { label: 'Not sure — recommend something', minutes: 360 },
 };
 
-// Same free Web3Forms key already used for the site — kept server-side now,
-// so it's no longer visible in the page source like it was before.
-const WEB3FORMS_ACCESS_KEY = '96792ed9-7011-46d2-b993-9a942cf62d43';
+// Free Web3Forms access keys — one per inbox that should get a booking
+// notification. Kept server-side (not in page source, unlike before). Each
+// key comes from verifying an email at web3forms.com; add/remove entries
+// here to change who gets notified — no other code changes needed.
+const WEB3FORMS_ACCESS_KEYS = [
+  '96792ed9-7011-46d2-b993-9a942cf62d43',
+  'ed1da520-2d26-4ef9-8693-0090eb09035f',
+];
 
 export default {
   async fetch(request, env) {
@@ -228,28 +233,29 @@ async function handleBook(request, env) {
 
   const label = `${fmt12(time_slot)} – ${fmt12(end_time)}`;
 
-  // Notify the owner by email (server-side, reuses the free Web3Forms key —
-  // this never touches the browser, so the key isn't exposed in page source).
-  try {
-    await fetch('https://api.web3forms.com/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        access_key: WEB3FORMS_ACCESS_KEY,
-        subject: `New confirmed booking — ${date} ${label}`,
-        name,
-        phone,
-        vehicle,
-        service: service.label,
-        location,
-        message,
-        date,
-        time: label,
-      }),
-    });
-  } catch {
-    // The booking is already saved even if the notification email fails.
-  }
+  // Notify the owner(s) by email — fires one request per access key above,
+  // in parallel. Server-side, so none of these keys are exposed in page
+  // source. A failed/slow email never blocks or fails the booking itself.
+  const notifyPayload = {
+    subject: `New confirmed booking — ${date} ${label}`,
+    name,
+    phone,
+    vehicle,
+    service: service.label,
+    location,
+    message,
+    date,
+    time: label,
+  };
+  await Promise.allSettled(
+    WEB3FORMS_ACCESS_KEYS.map((access_key) =>
+      fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ access_key, ...notifyPayload }),
+      })
+    )
+  );
 
   return json({ success: true, date, time_slot, end_time, label, service: service.label });
 }
