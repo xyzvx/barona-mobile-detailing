@@ -9,4 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "barona-bookings"
-database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "08cd47e8-ec98-4a27-9389-376f5404d2a1"
