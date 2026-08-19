@@ -5,3 +5,6 @@
 *.zip
 README.md
 Website Build Notes*.md
+worker.js
+wrangler.toml
+schema.sql
