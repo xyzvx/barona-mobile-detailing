@@ -31,7 +31,7 @@
   "areaServed": ["Davenport, IA", "Bettendorf, IA", "Rock Island, IL", "Moline, IL", "East Moline, IL"],
   "slogan": "Detailing with purpose. Excellence in every detail.",
   "sameAs": ["https://instagram.com/baronamobiledetailing"],
-  "openingHours": "Mo-Sa 9:00-17:00",
+  "openingHours": "Mo-Sa 09:00-17:00",
   "url": "https://[yourdomain].com/"
 }
 </script>
@@ -210,22 +210,24 @@
       <h2 class="section-title">Recent Details</h2>
       <p class="section-sub">More before/after shots added regularly — follow along on Instagram.</p>
       <div class="gallery-grid">
-  <div class="gallery-item gallery-photo">
-    <img src="assets/gallery-bmw-white.jpg" alt="Detailed white BMW X3 exterior, front view — Barona Mobile Detailing">
-  </div>
-  <div class="gallery-item gallery-photo">
-    <img src="assets/gallery-cadillac-ct5.jpg" alt="Detailed white Cadillac CT5 exterior — Barona Mobile Detailing">
-  </div>
-  <div class="gallery-item gallery-photo">
-    <img src="assets/gallery-bmw-interior-1.jpg" alt="Detailed BMW interior, dashboard and seats — Barona Mobile Detailing">
-  </div>
-  <div class="gallery-item gallery-photo">
-    <img src="assets/gallery-cadillac-interior.jpg" alt="Detailed Cadillac tan leather interior — Barona Mobile Detailing">
-  </div>
-  <div class="gallery-item gallery-photo">
-    <img src="assets/gallery-bmw-interior-2.jpg" alt="Detailed BMW interior and door sill — Barona Mobile Detailing">
-  </div>
-</div>
+        <div class="gallery-item gallery-photo">
+          <img src="assets/gallery-bmw-white.jpg" alt="Detailed white BMW X3 exterior, front view — Barona Mobile Detailing">
+        </div>
+        <div class="gallery-item gallery-photo">
+          <img src="assets/gallery-cadillac-ct5.jpg" alt="Detailed white Cadillac CT5 exterior — Barona Mobile Detailing">
+        </div>
+        <div class="gallery-item gallery-photo">
+          <img src="assets/gallery-bmw-interior-1.jpg" alt="Detailed BMW interior, dashboard and seats — Barona Mobile Detailing">
+        </div>
+        <div class="gallery-item gallery-photo">
+          <img src="assets/gallery-cadillac-interior.jpg" alt="Detailed Cadillac tan leather interior — Barona Mobile Detailing">
+        </div>
+        <div class="gallery-item gallery-photo">
+          <img src="assets/gallery-bmw-interior-2.jpg" alt="Detailed BMW interior and door sill — Barona Mobile Detailing">
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- REVIEWS -->
   <section id="reviews" class="section">
@@ -316,53 +318,89 @@
 
   <!-- CONTACT / BOOKING -->
   <section id="contact" class="section alt">
-    <div class="container contact-inner">
-      <div>
-        <p class="eyebrow">Get In Touch</p>
-        <h2 class="section-title left">Book Your Detail</h2>
-        <p class="section-sub left">Fill out the form and we'll text or call to confirm your appointment — usually within a few hours.</p>
-        <ul class="contact-info">
-          <li><a href="tel:+13093734642">(309) 373-4642</a></li>
-          <li><a href="https://instagram.com/baronamobiledetailing" target="_blank" rel="noopener">@baronamobiledetailing</a></li>
-          <li>Mon–Sat, 9am–5pm</li>
-        </ul>
+    <div class="container">
+      <p class="eyebrow center">Get In Touch</p>
+      <h2 class="section-title">Book Your Detail</h2>
+      <p class="section-sub">Pick an open day below, choose a time, and your appointment is locked in instantly.</p>
+
+      <div class="calendar-wrap">
+        <label class="service-select-label" for="serviceSelect">1. Choose a service</label>
+        <select id="serviceSelect" class="service-select">
+          <option value="" disabled selected>Select a service to see open days…</option>
+          <option value="exterior">Exterior Detail — $150 (about 3 hrs)</option>
+          <option value="interior">Interior Detail — $150 (about 3 hrs)</option>
+          <option value="full">Full Detail — $300 (about 6 hrs)</option>
+          <option value="unsure">Not sure — recommend something</option>
+        </select>
+        <p id="chooseServiceHint" class="calendar-status">Pick a service above to see open days and times — appointment length depends on the service.</p>
+
+        <div id="calendarBody" hidden>
+          <p class="service-select-label cal-step-label">2. Pick a day &amp; time</p>
+          <div class="calendar-header">
+            <button type="button" id="calPrev" class="calendar-nav" aria-label="Previous month">&#8249;</button>
+            <h3 id="calMonthLabel" class="calendar-month"></h3>
+            <button type="button" id="calNext" class="calendar-nav" aria-label="Next month">&#8250;</button>
+          </div>
+          <div class="calendar-legend">
+            <span><i class="cal-dot cal-dot-green"></i> Available</span>
+            <span><i class="cal-dot cal-dot-red"></i> Fully booked</span>
+            <span><i class="cal-dot cal-dot-gray"></i> Closed</span>
+          </div>
+          <div class="calendar-weekdays">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div id="calendarGrid" class="calendar-grid" aria-live="polite"></div>
+          <p id="calendarStatus" class="calendar-status"></p>
+
+          <div id="slotPicker" class="slot-picker" hidden>
+            <p id="slotPickerLabel" class="slot-picker-label"></p>
+            <div id="slotButtons" class="slot-buttons"></div>
+          </div>
+        </div>
       </div>
 
-      <form id="bookingForm" class="booking-form">
-        <!-- Get a free access key at https://web3forms.com — no signup required, just verify your email -->
-        <input type="hidden" name="access_key" value="ed1da520-2d26-4ef9-8693-0090eb09035f">
-        <input type="hidden" name="subject" value="New booking request — Barona Mobile Detailing">
+      <div class="contact-inner">
+        <div>
+          <p class="eyebrow">Prefer to talk first?</p>
+          <ul class="contact-info">
+            <li><a href="tel:+13093734642">(309) 373-4642</a></li>
+            <li><a href="https://instagram.com/baronamobiledetailing" target="_blank" rel="noopener">@baronamobiledetailing</a></li>
+            <li>Mon–Sat, 9am–5pm</li>
+          </ul>
+        </div>
 
-        <label>Name
-          <input type="text" name="name" required>
-        </label>
-        <label>Phone
-          <input type="tel" name="phone" required>
-        </label>
-        <label>Vehicle (year/make/model)
-          <input type="text" name="vehicle">
-        </label>
-        <label>Service Needed
-          <select name="service">
-            <option>Exterior Detail — $150</option>
-            <option>Interior Detail — $150</option>
-            <option>Full Detail — $300</option>
-            <option>Not sure — recommend something</option>
-          </select>
-        </label>
-        <label>Preferred Date
-          <input type="date" name="preferred_date">
-        </label>
-        <label>Address / Location
-          <input type="text" name="location" placeholder="Where should we come to you?">
-        </label>
-        <label>Message
-          <textarea name="message" rows="3"></textarea>
-        </label>
+        <form id="bookingForm" class="booking-form">
+          <p class="service-select-label cal-step-label">3. Your details</p>
+          <div id="selectedSlot" class="selected-slot" hidden>
+            <span id="selectedSlotText"></span>
+            <button type="button" id="changeSlot" class="link-btn">Change</button>
+          </div>
+          <p id="noSlotHint" class="no-slot-hint">Pick a service and an open day above to choose your appointment time.</p>
 
-        <button type="submit" class="btn btn-primary btn-full">Request Booking</button>
-        <p id="formStatus" class="form-status" role="status"></p>
-      </form>
+          <input type="hidden" name="date" id="bookingDate">
+          <input type="hidden" name="time_slot" id="bookingTimeSlot">
+          <input type="hidden" name="service" id="bookingService">
+
+          <label>Name
+            <input type="text" name="name" required>
+          </label>
+          <label>Phone
+            <input type="tel" name="phone" required>
+          </label>
+          <label>Vehicle (year/make/model)
+            <input type="text" name="vehicle">
+          </label>
+          <label>Address / Location
+            <input type="text" name="location" placeholder="Where should we come to you?">
+          </label>
+          <label>Message
+            <textarea name="message" rows="3"></textarea>
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-full" id="bookingSubmit" disabled>Select a Time to Book</button>
+          <p id="formStatus" class="form-status" role="status"></p>
+        </form>
+      </div>
     </div>
   </section>
 
@@ -379,6 +417,7 @@
   </div>
 </footer>
 
+<script src="calendar.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

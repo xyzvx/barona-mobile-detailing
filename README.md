@@ -1,9 +1,59 @@
 # Barona Mobile Detailing — Website
 
-A fast, secure, 100% free-to-host website: plain HTML/CSS/JS, no framework,
-no database, no server — which also means almost no attack surface. Built
-using your real logo, brand colors (black / white / gold), and the BMW
-photo from your flyer.
+A fast, secure, 100% free-to-host website: plain HTML/CSS/JS, no framework.
+Built using your real logo, brand colors (black / white / gold), and the BMW
+photo from your flyer. The one exception to "no server, no database" is the
+booking calendar below — showing real-time availability to every visitor
+needs a small shared database, so that one piece runs on a free Cloudflare
+Worker + D1 database instead of being plain static files.
+
+## 0. Booking calendar setup (one-time, ~15 minutes)
+
+The site now shows a live calendar on the Book Your Detail section — green
+days have open times, red days are fully booked, gray days are closed. It's
+powered by three new files: `worker.js` (the logic), `wrangler.toml` (tells
+Cloudflare about the database), and `schema.sql` (the database structure).
+
+**Business hours baked in:** Mon–Sat, 9am–5pm, offering start times on the
+hour. Sundays are always closed. Appointment length depends on the service
+picked: Exterior Detail and Interior Detail are 3 hours, Full Detail is 6
+hours ("Not sure" defaults to 6 hours, to be safe). That means the calendar
+shows different open times for different services — e.g. Full Detail can
+only start at 9, 10, or 11am (so it still finishes by 5pm), while a 3-hour
+service can start any hour from 9am to 2pm. To change hours, appointment
+lengths, or pricing text, edit `OPEN_MIN` / `CLOSE_MIN` / `SERVICE_META` at
+the top of `worker.js`.
+
+Steps:
+
+1. In the Cloudflare dashboard, go to **Storage & Databases → D1** and
+   create a new database named `barona-bookings`.
+2. Open it and find its **Database ID** (shown on its overview/settings
+   page) — copy it.
+3. In `wrangler.toml` (in your GitHub repo), replace
+   `PASTE_YOUR_D1_DATABASE_ID_HERE` with that ID and commit.
+4. Back in the database's dashboard page, find the **Console** (sometimes
+   called "Query" or "Execute SQL") tab. Paste in the entire contents of
+   `schema.sql` and run it — this creates the `bookings` and `closed_days`
+   tables. You only do this once.
+5. Make sure `worker.js`, `wrangler.toml`, and `schema.sql` are all uploaded
+   to your GitHub repo (root folder, alongside `index.html`), along with the
+   updated `index.html`, `style.css`, `script.js`, and the new `calendar.js`.
+   Commit changes — Cloudflare will redeploy automatically.
+6. Open the live site and check the Book Your Detail section: you should
+   see a calendar with green days. Click one, pick a time, and submit a
+   test booking — then reload the page and confirm that day/time now shows
+   as booked (or red, if it was the only open slot).
+
+**To view or cancel bookings:** Cloudflare dashboard → your D1 database →
+**Tables** → `bookings`. No extra login or admin page needed — you can see
+every booking there, and change a row's `status` to `cancelled` to free that
+slot back up. To block off a specific day (vacation, etc.) even though it'd
+normally be open, add a row to the `closed_days` table with that date.
+
+Every new booking still emails you (via the same Web3Forms setup as before)
+so you don't have to keep the dashboard open — the calendar is the source
+of truth, the email is just the heads-up.
 
 ## 1. Two things still needed from you
 
