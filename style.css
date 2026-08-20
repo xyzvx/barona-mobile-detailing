@@ -231,65 +231,47 @@ img { max-width: 100%; display: block; }
   margin-top: 36px;
 }
 
-/* Maintenance plans */
-.plans-highlight {
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: clamp(1.3rem, 3vw, 1.8rem);
-  color: var(--gold);
-  margin: 8px 0 40px;
+/* VIP Membership */
+.vip-card {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 32px;
+  background: var(--black);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 32px;
+  margin-top: 36px;
 }
-.plans-table-wrap {
-  overflow-x: auto;
+.vip-price { margin: 0 0 8px; display: flex; align-items: baseline; gap: 6px; }
+.vip-price-amount { font-family: var(--font-display); font-size: 2.4rem; color: var(--gold); }
+.vip-price-period { color: var(--gray); font-size: 1rem; }
+.vip-price-sub { color: var(--gray); font-size: 0.95rem; margin: 0 0 22px; max-width: 46ch; }
+.vip-perks { list-style: none; padding: 0; margin: 0 0 26px; display: grid; gap: 10px; }
+.vip-perks li { padding-left: 26px; position: relative; font-size: 0.95rem; }
+.vip-perks li::before { content: "✓"; position: absolute; left: 0; color: var(--gold); font-weight: 700; }
+
+.vip-card-spots {
+  background: var(--black-soft);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  padding: 24px;
+  align-self: start;
 }
-.plans-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 640px;
-  font-size: 0.95rem;
-}
-.plans-table th, .plans-table td {
-  padding: 16px 20px;
-  text-align: left;
-  white-space: nowrap;
-}
-.plans-table thead th {
-  font-size: 0.72rem;
+.vip-spots-label, .vip-members-label {
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
   color: var(--gray);
-  border-bottom: 1px solid var(--line);
-  font-weight: 600;
+  margin: 0 0 8px;
 }
-.plans-table tbody tr { border-bottom: 1px solid var(--line); }
-.plans-table tbody tr:last-child { border-bottom: none; }
-.plans-table tbody tr:hover { background: rgba(247,246,243,0.03); }
-.plan-name {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.05rem;
-  color: var(--white);
-}
-.plan-featured { background: rgba(201,162,76,0.07); }
-.plan-featured .plan-name { color: var(--gold); }
-.save-pill {
-  display: inline-block;
-  background: var(--white);
-  color: var(--black);
-  font-weight: 700;
-  font-size: 0.78rem;
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-.plans-footnote {
-  text-align: center;
-  color: var(--gray-dim);
-  font-size: 0.85rem;
-  margin-top: 24px;
-}
-.plans-scroll-hint { display: none; text-align: center; color: var(--gray-dim); font-size: 0.78rem; margin-top: 8px; }
+.vip-spots-count { font-family: var(--font-serif); font-size: 1.5rem; margin: 0 0 12px; }
+.vip-progress { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin-bottom: 8px; }
+.vip-progress-fill { height: 100%; background: var(--gold); border-radius: 999px; }
+.vip-spots-remaining { font-size: 0.85rem; color: var(--gray); margin: 0 0 24px; }
+.vip-members-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.vip-members-list li { font-weight: 600; font-size: 0.95rem; }
+.vip-star { color: var(--gold); margin-right: 6px; }
+.vip-footnote { text-align: center; color: var(--gray-dim); font-size: 0.85rem; margin-top: 24px; }
 
 /* Reviews */
 .reviews-placeholder {
@@ -574,10 +556,7 @@ img { max-width: 100%; display: block; }
   .about-inner { grid-template-columns: 1fr; text-align: center; justify-items: center; }
   .calendar-wrap { padding: 16px; }
   .cal-day { font-size: 0.8rem; }
-}
-
-@media (max-width: 700px) {
-  .plans-scroll-hint { display: block; }
+  .vip-card { grid-template-columns: 1fr; padding: 24px; }
 }
 
 @media (max-width: 760px) {

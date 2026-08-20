@@ -20,9 +20,9 @@ const STEP_MIN = 60;        // offer start times on the hour
 const CLOSED_WEEKDAY = 0;   // Sunday (0 = Sunday in JS Date)
 
 const SERVICE_META = {
-  exterior: { label: 'Exterior Detail — $150', minutes: 180 },
-  interior: { label: 'Interior Detail — $150', minutes: 180 },
-  full: { label: 'Full Detail — $300', minutes: 360 },
+  exterior: { label: 'Exterior Detail — $200', minutes: 180 },
+  interior: { label: 'Interior Detail — $200', minutes: 180 },
+  full: { label: 'Full Detail — $400', minutes: 360 },
   // "Not sure" defaults to the longest job (6 hrs) — safer to hold too much
   // time than to double-book a slot that turns out to need more of it.
   unsure: { label: 'Not sure — recommend something', minutes: 360 },
