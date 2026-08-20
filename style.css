@@ -74,6 +74,12 @@ img { max-width: 100%; display: block; }
   background: rgba(10,10,10,0.92);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+  transition: box-shadow 0.25s ease, background 0.25s ease;
+}
+.site-header.is-scrolled {
+  background: rgba(10,10,10,0.98);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
 }
 .header-inner {
   display: flex;
@@ -81,20 +87,51 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
   height: 76px;
 }
-.logo-img { height: 46px; width: auto; }
+.logo-img { height: 46px; width: auto; transition: height 0.25s ease; }
+.site-header.is-scrolled .logo-img { height: 38px; }
 
 .nav { display: flex; gap: 30px; }
 .nav a {
+  position: relative;
   color: #d9d8d3;
   font-weight: 500;
   font-size: 0.92rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   transition: color 0.15s;
+  padding-bottom: 4px;
+}
+.nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: 0;
+  height: 1px;
+  background: var(--gold);
+  transition: right 0.2s ease;
 }
 .nav a:hover { color: var(--gold); }
+.nav a:hover::after { right: 0; }
 
-.header-cta { display: flex; align-items: center; gap: 14px; }
+.header-cta { display: flex; align-items: center; gap: 18px; }
+
+.header-social, .social-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray);
+  transition: color 0.15s, transform 0.15s;
+}
+.social-icon svg { width: 19px; height: 19px; }
+.social-icon:hover { color: var(--gold); transform: translateY(-1px); }
+.footer-phone { color: var(--gray); transition: color 0.15s; }
+.footer-phone:hover { color: var(--gold); }
 
 .btn {
   display: inline-block;
@@ -643,8 +680,6 @@ img { max-width: 100%; display: block; }
   font-size: 0.85rem;
 }
 .footer-logo { height: 34px; width: auto; }
-.social-links { display: flex; gap: 20px; }
-.social-links a:hover { color: var(--gold); }
 
 /* Responsive */
 @media (max-width: 860px) {
@@ -682,3 +717,30 @@ img { max-width: 100%; display: block; }
   .btn-call { display: none; }
   .footer-inner { flex-direction: column; text-align: center; }
 }
+
+@media (max-width: 420px) {
+  .header-social { gap: 10px; }
+  .social-icon svg { width: 17px; height: 17px; }
+  .header-cta { gap: 12px; }
+}
+
+/* Scroll-reveal animation — see interactions.js. Elements fade + rise into
+   view the first time they cross into the viewport; JS applies the .reveal
+   class at runtime so nothing here affects users with JS disabled (they
+   just see everything immediately, no broken hidden content). */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition-delay: calc(var(--reveal-i, 0) * 70ms);
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  * { scroll-behavior: auto !important; }
+}
+
+/* Gallery hover zoom */
+.gallery-photo img { transition: transform 0.35s ease; }
+.gallery-photo:hover img { transform: scale(1.08); }
