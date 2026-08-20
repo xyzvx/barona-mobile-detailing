@@ -296,6 +296,7 @@ img { max-width: 100%; display: block; }
 .review-stars { color: var(--gold); letter-spacing: 2px; margin-bottom: 10px; }
 .review-text { color: var(--gray); font-style: italic; }
 .review-author { color: var(--white); font-weight: 600; margin-top: 12px; font-size: 0.9rem; }
+.review-lang { color: var(--gray-dim); font-weight: 400; font-style: italic; }
 .reviews-cta { text-align: center; margin-top: 44px; }
 
 /* Feature grid */
