@@ -166,6 +166,8 @@ img { max-width: 100%; display: block; }
 }
 .btn-call:hover { border-color: var(--gold); color: var(--gold); }
 
+.btn-header-book { padding: 10px 22px; font-size: 0.8rem; }
+
 .btn-full { width: 100%; text-align: center; }
 
 .nav-toggle {
@@ -664,6 +666,52 @@ img { max-width: 100%; display: block; }
 .link-btn { background: none; border: none; color: var(--gold); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0; }
 .no-slot-hint { color: var(--gray); font-size: 0.9rem; margin: 0; }
 
+/* Floating "Book Now" CTA — jumps straight to the booking calendar without
+   scrolling the whole page. Hidden until you've scrolled past the hero, and
+   hidden again once the booking section itself is in view (see
+   interactions.js for the show/hide logic). */
+.float-book-cta {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--gold);
+  color: var(--black);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.4);
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, background 0.15s;
+
+  right: 24px;
+  bottom: 24px;
+  padding: 15px 24px;
+  border-radius: 999px;
+}
+.float-book-cta svg { width: 18px; height: 18px; }
+.float-book-cta.is-visible { opacity: 1; transform: none; pointer-events: auto; }
+.float-book-cta:hover { background: #e0bb5f; }
+
+@media (max-width: 640px) {
+  .float-book-cta {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+    font-size: 0.95rem;
+  }
+  .float-book-cta.is-visible { transform: none; }
+}
+
 /* Footer */
 .site-footer {
   background: var(--black);
@@ -715,6 +763,7 @@ img { max-width: 100%; display: block; }
   .nav.open { display: flex; }
   .nav-toggle { display: flex; }
   .btn-call { display: none; }
+  .btn-header-book { display: none; }
   .footer-inner { flex-direction: column; text-align: center; }
 }
 
