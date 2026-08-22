@@ -2,28 +2,52 @@
 // Purely a fun, optional touch on the booking form, folded right into the
 // "Vehicle (year/make/model)" field: as soon as someone types their vehicle
 // in, we guess the body style from keywords (F-150 → truck, Explorer → SUV,
-// etc., defaulting to sedan) and pop up a small rotating low-poly model with
-// a gold "just detailed" shine light sweeping across it. The pills underneath
-// are only there to correct a wrong guess — nothing here is required data
-// for the booking itself.
+// etc., defaulting to sedan) and pop up a small rotating model with a gold
+// "just detailed" shine light sweeping across it. The pills underneath are
+// only there to correct a wrong guess — nothing here is required data for
+// the booking itself.
 //
-// Three.js loads lazily (as an ES module, dynamically imported) only once
-// someone actually has a model to show, so nobody pays for this on page
-// load if they never touch the vehicle field. If it fails to load for any
-// reason (slow connection, ad blocker, older browser), the booking form
-// still works fine without it — this never blocks or breaks the actual
+// The models themselves are real hand-modeled car shapes from Kenney's
+// "Car Kit" (kenney.nl/assets/car-kit, CC0 — free for commercial use, no
+// attribution required), stored locally in /models so there's no dependency
+// on a third-party asset host staying up. If a model fails to load for any
+// reason, we fall back to a simple built-from-code shape (buildProceduralCar
+// below) rather than showing nothing — and if three.js itself can't load at
+// all (slow connection, ad blocker, older browser), the booking form still
+// works fine without any preview. This never blocks or breaks the actual
 // booking.
+//
+// Three.js and the GLTF loader load lazily (as ES modules, dynamically
+// imported) only once someone actually has a model to show, so nobody pays
+// for this on page load if they never touch the vehicle field.
 
 (function () {
   const picker = document.getElementById('vehicle3dPicker');
   const wrap = document.getElementById('vehicle3dWrap');
   const canvas = document.getElementById('vehicle3dCanvas');
   const hint = document.getElementById('vehicle3dHint');
-  const caption = document.getElementById('vehicle3dCaption');
   const vehicleInput = document.getElementById('vehicleInput');
   if (!picker || !wrap || !canvas || !hint) return;
 
-  const THREE_MODULE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.185.1/three.module.min.js';
+  // "three" is resolved via the <script type="importmap"> in index.html, so
+  // this and the GLTF loader below share one engine instance instead of
+  // loading two separate copies of three.js.
+  const GLTF_LOADER_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/loaders/GLTFLoader.js';
+
+  // Real modeled car shapes (see file header) — one per pill. Kenney's kit
+  // doesn't have a true "coupe," so that pill uses their sporty hatchback,
+  // which is the closest generic low/sporty shape in the free set.
+  const MODEL_URL = {
+    sedan: 'models/car-sedan.glb',
+    suv: 'models/car-suv.glb',
+    truck: 'models/car-truck.glb',
+    van: 'models/car-van.glb',
+    coupe: 'models/car-coupe.glb',
+  };
+  // These models are modeled small (~2.5-3 units long) with the wheels'
+  // contact patch at local y = -1. This scales and lifts each one to sit on
+  // the scene's ground plane at roughly the size the camera is framed for.
+  const MODEL_SCALE = 1.75;
 
   // Cheap keyword guesser so the 3D preview can pick itself as soon as
   // someone types their vehicle in, instead of making them tap a button.
@@ -188,15 +212,29 @@
   }
 
   let T = null;
+  let GLTFLoaderClass = null;
   let threeLoadPromise = null;
   let scene, camera, renderer;
   let currentCar = null;
   let initialized = false;
   let animId = null;
+  const modelCache = {}; // typeKey -> loaded THREE.Group, reused (never disposed) once fetched
 
+  // Loads three.js and the GLTF loader together. The loader is optional in
+  // the sense that if it fails to load we still have three.js itself and
+  // can fall back to the built-from-code shapes.
   function loadThree() {
     if (threeLoadPromise) return threeLoadPromise;
-    threeLoadPromise = import(THREE_MODULE_URL);
+    threeLoadPromise = import('three').then(async (threeMod) => {
+      T = threeMod;
+      try {
+        const loaderMod = await import(GLTF_LOADER_URL);
+        GLTFLoaderClass = loaderMod.GLTFLoader;
+      } catch (err) {
+        GLTFLoaderClass = null; // real models unavailable — procedural fallback still works
+      }
+      return threeMod;
+    });
     return threeLoadPromise;
   }
 
@@ -207,7 +245,23 @@
     });
   }
 
-  function buildCar(typeKey) {
+  // Fetches (and caches) the real modeled car for a type. Never disposed
+  // once loaded — these are small files and we only ever show one at a
+  // time, so keeping all five in memory once visited is cheap and means
+  // switching pills back and forth is instant after the first load.
+  async function loadRealCar(typeKey) {
+    if (modelCache[typeKey]) return modelCache[typeKey];
+    if (!GLTFLoaderClass || !MODEL_URL[typeKey]) return null;
+    const loader = new GLTFLoaderClass();
+    const gltf = await loader.loadAsync(MODEL_URL[typeKey]);
+    const car = gltf.scene;
+    car.scale.setScalar(MODEL_SCALE);
+    car.position.y = MODEL_SCALE; // the kit's wheels sit at local y = -1
+    modelCache[typeKey] = car;
+    return car;
+  }
+
+  function buildProceduralCar(typeKey) {
     const cfg = PROFILE[typeKey] || PROFILE.sedan;
     const group = new T.Group();
     const zStart = -cfg.length / 2;
@@ -409,32 +463,53 @@
     renderer.render(scene, camera);
   }
 
-  function setCar(typeKey) {
+  function placeCar(carObject) {
     if (currentCar) {
       scene.remove(currentCar);
-      disposeGroup(currentCar);
+      if (currentCar.__procedural) disposeGroup(currentCar); // cached real models are kept, not disposed
     }
-    currentCar = buildCar(typeKey);
+    currentCar = carObject;
     scene.add(currentCar);
   }
 
+  // Tries the real modeled car first; if the loader isn't available or the
+  // fetch fails (missing file, flaky connection), builds the simpler
+  // shape-from-code version instead so there's always something to show.
+  // myToken lets a rapid second pill-tap win instead of both this and a
+  // newer call racing to place their result last.
+  async function setCar(typeKey, myToken) {
+    let car = null;
+    try {
+      car = await loadRealCar(typeKey);
+    } catch (err) {
+      car = null; // fall through to the procedural shape below
+    }
+    if (myToken !== loadToken) return; // a newer pill was tapped meanwhile
+    if (!car) {
+      car = buildProceduralCar(typeKey);
+      car.__procedural = true;
+    }
+    placeCar(car);
+  }
+
+  let loadToken = 0;
   async function selectType(typeKey, btn) {
+    const myToken = ++loadToken;
     picker.querySelectorAll('.vehicle-type-btn').forEach((b) => b.classList.remove('is-active'));
     if (!btn) btn = picker.querySelector(`[data-vehicle-type="${typeKey}"]`);
     if (btn) btn.classList.add('is-active');
     wrap.hidden = false;
-    if (caption) caption.hidden = false;
 
     if (!initialized) {
       hint.hidden = false;
       hint.textContent = 'Loading 3D preview…';
       try {
-        const mod = await loadThree();
-        T = mod;
+        await loadThree();
       } catch (err) {
-        hint.textContent = "Couldn't load the 3D preview right now — no worries, your booking still works fine without it.";
+        if (myToken === loadToken) hint.textContent = "Couldn't load the 3D preview right now — no worries, your booking still works fine without it.";
         return;
       }
+      if (myToken !== loadToken) return; // a newer pill was tapped while three.js was loading
       try {
         initScene();
       } catch (err) {
@@ -445,14 +520,14 @@
       animate();
     }
 
+    await setCar(typeKey, myToken);
+    if (myToken !== loadToken) return; // a newer pill was tapped while this model was loading
     hint.hidden = true;
-    setCar(typeKey);
   }
 
   function clearPreview() {
     picker.querySelectorAll('.vehicle-type-btn').forEach((b) => b.classList.remove('is-active'));
     wrap.hidden = true;
-    if (caption) caption.hidden = true;
   }
 
   // Manual pills always win — a tap here means "no, I know better than the
