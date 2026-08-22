@@ -223,12 +223,12 @@
 
     // The painted body — a rounded hood-to-decklid silhouette lofted from
     // many thin slices instead of one flat box.
-    group.add(buildLoftGroup(cfg.body, { length: cfg.length, zStart, material: bodyMat, steps: 22 }));
+    group.add(buildLoftGroup(cfg.body, { length: cfg.length, zStart, material: bodyMat, steps: 30 }));
 
     // The glass greenhouse, sitting directly on the body's roofline with
     // its own sloped windshield/backlite taper.
     group.add(buildLoftGroup(cfg.greenhouse, {
-      length: cfg.length, zStart, material: glassMat, steps: 18,
+      length: cfg.length, zStart, material: glassMat, steps: 26,
       yBaseFn: (t) => interp(cfg.body, t, 'h'),
     }));
 
@@ -363,12 +363,23 @@
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height, false);
+    // Modern three.js uses physically-based light units, where the old
+    // "1.0 is plenty bright" intensities read as almost pitch black — this
+    // is what was making the car nearly disappear into the dark card
+    // background. These values are tuned for a clearly-lit "showroom" look
+    // against that dark backdrop instead.
+    if (T.ACESFilmicToneMapping) renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    if (T.SRGBColorSpace) renderer.outputColorSpace = T.SRGBColorSpace;
 
-    scene.add(new T.HemisphereLight(0xfff6df, 0x0a0a0a, 0.65));
-    const key = new T.DirectionalLight(0xffffff, 1.1);
+    scene.add(new T.HemisphereLight(0xfff6df, 0x11151c, 2.4));
+    const key = new T.DirectionalLight(0xffffff, 3.6);
     key.position.set(4, 6, 4);
     scene.add(key);
-    const rim = new T.DirectionalLight(0xc9a24c, 0.55); // gold rim light
+    const fill = new T.DirectionalLight(0xbfd4ff, 1.1); // cool fill so the shadow side isn't pure black
+    fill.position.set(-5, 2, 5);
+    scene.add(fill);
+    const rim = new T.DirectionalLight(0xc9a24c, 2.6); // gold rim light — the "just detailed" shine
     rim.position.set(-4, 3, -3);
     scene.add(rim);
 
