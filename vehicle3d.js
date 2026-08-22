@@ -54,7 +54,7 @@
   // blocks stacked on each other.
   const PROFILE = {
     sedan: {
-      length: 4.5, wheelR: 0.34, wheelZFrac: [0.15, 0.87], mirrorT: 0.34,
+      length: 4.5, wheelR: 0.34, tireW: 0.30, wheelZFrac: [0.15, 0.87], mirrorT: 0.34,
       body: [
         { t: 0.00, w: 0.75, h: 0.18 }, { t: 0.05, w: 1.55, h: 0.22 },
         { t: 0.13, w: 1.85, h: 0.38 }, { t: 0.24, w: 1.78, h: 0.46 },
@@ -72,7 +72,7 @@
       ],
     },
     coupe: {
-      length: 4.3, wheelR: 0.32, wheelZFrac: [0.14, 0.86], mirrorT: 0.35,
+      length: 4.3, wheelR: 0.32, tireW: 0.30, wheelZFrac: [0.14, 0.86], mirrorT: 0.35, spoilerT: 0.80,
       body: [
         { t: 0.00, w: 0.70, h: 0.16 }, { t: 0.05, w: 1.50, h: 0.20 },
         { t: 0.12, w: 1.80, h: 0.34 }, { t: 0.22, w: 1.74, h: 0.42 },
@@ -90,7 +90,8 @@
       ],
     },
     suv: {
-      length: 4.7, wheelR: 0.40, wheelZFrac: [0.14, 0.90], mirrorT: 0.32,
+      length: 4.7, wheelR: 0.42, tireW: 0.40, wheelZFrac: [0.14, 0.90], mirrorT: 0.32,
+      flareWheels: true, roofRailFrac: [0.32, 0.84],
       body: [
         { t: 0.00, w: 0.85, h: 0.30 }, { t: 0.05, w: 1.70, h: 0.36 },
         { t: 0.12, w: 2.00, h: 0.56 }, { t: 0.22, w: 1.95, h: 0.66 },
@@ -108,7 +109,7 @@
       ],
     },
     van: {
-      length: 4.8, wheelR: 0.38, wheelZFrac: [0.10, 0.92], mirrorT: 0.14,
+      length: 4.8, wheelR: 0.38, tireW: 0.32, wheelZFrac: [0.10, 0.92], mirrorT: 0.14,
       body: [
         { t: 0.00, w: 0.90, h: 0.24 }, { t: 0.04, w: 1.75, h: 0.28 },
         { t: 0.09, w: 2.00, h: 0.42 }, { t: 0.18, w: 1.98, h: 0.50 },
@@ -125,8 +126,8 @@
       ],
     },
     truck: {
-      length: 5.3, wheelR: 0.40, wheelZFrac: [0.16, 0.86], mirrorT: 0.16,
-      bed: { t: 0.70, len: 2.4 },
+      length: 5.3, wheelR: 0.44, tireW: 0.42, wheelZFrac: [0.16, 0.86], mirrorT: 0.16,
+      bed: { t: 0.70, len: 2.4 }, flareWheels: true, hoodScoopT: 0.24,
       body: [
         { t: 0.00, w: 0.85, h: 0.28 }, { t: 0.04, w: 1.70, h: 0.34 },
         { t: 0.10, w: 2.00, h: 0.52 }, { t: 0.18, w: 1.95, h: 0.60 },
@@ -240,19 +241,34 @@
     trim.position.set(0, trimY, 0);
     group.add(trim);
 
-    // Wheels — dark tire plus a lighter hub cap poking through both faces.
+    // Wheels — dark tire, a lighter hub cap, and 5 spokes for a real
+    // wheel-and-rim look instead of a plain disc. Off-road-leaning types
+    // (SUV/truck) also get a dark fender-flare lip wrapping the wheel arch.
+    const tireW = cfg.tireW || 0.30;
     cfg.wheelZFrac.forEach((frac) => {
       const z = zStart + frac * cfg.length;
       const halfW = interp(cfg.body, frac, 'w') / 2 - 0.03;
       [-1, 1].forEach((side) => {
-        const tire = new T.Mesh(new T.CylinderGeometry(cfg.wheelR, cfg.wheelR, 0.3, 18), tireMat);
+        const x = side * halfW;
+        const tire = new T.Mesh(new T.CylinderGeometry(cfg.wheelR, cfg.wheelR, tireW, 18), tireMat);
         tire.rotation.z = Math.PI / 2;
-        tire.position.set(side * halfW, cfg.wheelR, z);
+        tire.position.set(x, cfg.wheelR, z);
         group.add(tire);
-        const hub = new T.Mesh(new T.CylinderGeometry(cfg.wheelR * 0.45, cfg.wheelR * 0.45, 0.32, 14), hubMat);
+        const hub = new T.Mesh(new T.CylinderGeometry(cfg.wheelR * 0.42, cfg.wheelR * 0.42, tireW + 0.03, 14), hubMat);
         hub.rotation.z = Math.PI / 2;
-        hub.position.set(side * halfW, cfg.wheelR, z);
+        hub.position.set(x, cfg.wheelR, z);
         group.add(hub);
+        for (let i = 0; i < 5; i++) {
+          const spoke = new T.Mesh(new T.BoxGeometry(tireW + 0.02, cfg.wheelR * 0.72, 0.045), hubMat);
+          spoke.rotation.x = (i * Math.PI * 2) / 5;
+          spoke.position.set(x, cfg.wheelR, z);
+          group.add(spoke);
+        }
+        if (cfg.flareWheels) {
+          const flare = new T.Mesh(new T.BoxGeometry(0.12, cfg.wheelR * 0.65, tireW + 0.32), bedLinerMat);
+          flare.position.set(x + side * 0.06, cfg.wheelR * 1.05, z);
+          group.add(flare);
+        }
       });
     });
 
@@ -291,6 +307,45 @@
       );
       liner.position.set(0, interp(cfg.body, cfg.bed.t, 'h') - 0.02, zStart + cfg.bed.t * cfg.length);
       group.add(liner);
+    }
+
+    // Roof rails — a pair of thin bars along an SUV's roofline.
+    if (cfg.roofRailFrac) {
+      const [rt0, rt1] = cfg.roofRailFrac;
+      const railZ0 = zStart + rt0 * cfg.length;
+      const railZ1 = zStart + rt1 * cfg.length;
+      const railLen = railZ1 - railZ0;
+      const railY = interp(cfg.body, (rt0 + rt1) / 2, 'h') + interp(cfg.greenhouse, (rt0 + rt1) / 2, 'h') + 0.05;
+      [-1, 1].forEach((side) => {
+        const railX = side * (interp(cfg.greenhouse, (rt0 + rt1) / 2, 'w') / 2 - 0.08);
+        const rail = new T.Mesh(new T.BoxGeometry(0.05, 0.045, railLen), bedLinerMat);
+        rail.position.set(railX, railY, (railZ0 + railZ1) / 2);
+        group.add(rail);
+      });
+    }
+
+    // Rear spoiler — two struts and a wing over the decklid, coupe-only.
+    if (cfg.spoilerT != null) {
+      const spoilerZ = zStart + cfg.spoilerT * cfg.length;
+      const baseY = interp(cfg.body, cfg.spoilerT, 'h');
+      const wingY = baseY + 0.22;
+      const spoilerHalfW = interp(cfg.body, cfg.spoilerT, 'w') / 2 - 0.12;
+      [-1, 1].forEach((side) => {
+        const strut = new T.Mesh(new T.BoxGeometry(0.05, 0.22, 0.06), bodyMat);
+        strut.position.set(side * spoilerHalfW, baseY + 0.11, spoilerZ);
+        group.add(strut);
+      });
+      const wing = new T.Mesh(new T.BoxGeometry(spoilerHalfW * 2 + 0.1, 0.04, 0.3), bodyMat);
+      wing.position.set(0, wingY, spoilerZ);
+      group.add(wing);
+    }
+
+    // Hood scoop — a raised, dark inset block on the hood, truck-only.
+    if (cfg.hoodScoopT != null) {
+      const scoopY = interp(cfg.body, cfg.hoodScoopT, 'h');
+      const scoop = new T.Mesh(new T.BoxGeometry(0.55, 0.06, 0.5), bedLinerMat);
+      scoop.position.set(0, scoopY + 0.03, zStart + cfg.hoodScoopT * cfg.length);
+      group.add(scoop);
     }
 
     return group;
