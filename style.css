@@ -533,6 +533,57 @@ img { max-width: 100%; display: block; }
 }
 .form-status { font-size: 0.9rem; font-weight: 600; min-height: 1.2em; }
 
+/* Vehicle-type picker + 3D preview — a little showroom moment while booking */
+.vehicle3d-field { display: grid; gap: 10px; }
+.vehicle3d-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gray);
+}
+.vehicle3d-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.vehicle-type-btn {
+  font: inherit;
+  background: var(--black-soft);
+  border: 1px solid var(--line);
+  color: var(--gray);
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.vehicle-type-btn:hover { border-color: rgba(201,162,76,0.5); color: var(--white); }
+.vehicle-type-btn.is-active { background: var(--gold); border-color: var(--gold); color: var(--black); }
+
+.vehicle3d-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: radial-gradient(circle at 50% 65%, rgba(201,162,76,0.08), transparent 60%), var(--black-soft);
+  overflow: hidden;
+}
+.vehicle3d-wrap canvas { width: 100%; height: 100%; display: block; }
+.vehicle3d-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--gray);
+  background: var(--black-soft);
+}
+.vehicle3d-hint[hidden] { display: none; }
+
 /* Booking calendar */
 .calendar-wrap {
   background: var(--black);
@@ -663,6 +714,7 @@ img { max-width: 100%; display: block; }
   font-size: 0.9rem;
   font-weight: 600;
 }
+.selected-slot[hidden] { display: none; }
 .link-btn { background: none; border: none; color: var(--gold); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0; }
 .no-slot-hint { color: var(--gray); font-size: 0.9rem; margin: 0; }
 
