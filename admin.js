@@ -94,6 +94,204 @@ async function apiFetch(path, options) {
   return data;
 }
 
+// --- Messages (unified Facebook/Instagram inbox) ----------------------------
+const msgMessage = document.getElementById('msgMessage');
+const msgThreads = document.getElementById('msgThreads');
+const msgEmptyState = document.getElementById('msgEmptyState');
+const msgThread = document.getElementById('msgThread');
+const msgThreadHeader = document.getElementById('msgThreadHeader');
+const msgBubbles = document.getElementById('msgBubbles');
+const msgDraftBanner = document.getElementById('msgDraftBanner');
+const msgDraftText = document.getElementById('msgDraftText');
+const msgDraftApprove = document.getElementById('msgDraftApprove');
+const msgDraftEdit = document.getElementById('msgDraftEdit');
+const msgDraftDiscard = document.getElementById('msgDraftDiscard');
+const msgComposer = document.getElementById('msgComposer');
+const msgComposerInput = document.getElementById('msgComposerInput');
+const autoSendToggle = document.getElementById('autoSendToggle');
+
+let latestConversations = [];
+let activeConversationId = null;
+let activeDraftId = null;
+let composerDraftId = null;
+
+function showMsgMessage(text, isError) {
+  msgMessage.textContent = text;
+  msgMessage.hidden = !text;
+  msgMessage.className = 'admin-message' + (isError ? ' is-error' : '');
+}
+
+function fmtMsgTime(sqliteDatetime) {
+  const d = new Date(String(sqliteDatetime).replace(' ', 'T') + 'Z');
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function renderThreads(conversations) {
+  msgThreads.innerHTML = '';
+  if (!conversations.length) {
+    msgThreads.innerHTML = '<p class="admin-dim admin-msg-threads-empty">No conversations yet.</p>';
+    return;
+  }
+  conversations.forEach((c) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'admin-msg-thread-item'
+      + (c.unread ? ' is-unread' : '')
+      + (c.id === activeConversationId ? ' is-active' : '');
+    item.innerHTML = `
+      <span class="admin-msg-thread-platform admin-msg-platform-${c.platform}">${c.platform === 'instagram' ? 'IG' : 'FB'}</span>
+      <span class="admin-msg-thread-info">
+        <span class="admin-msg-thread-name">${escapeHtml(c.customer_name || 'Customer')}</span>
+        <span class="admin-msg-thread-preview">${escapeHtml(c.last_message_preview || '')}</span>
+      </span>
+      ${c.unread ? '<span class="admin-msg-unread-dot"></span>' : ''}
+    `;
+    item.addEventListener('click', () => selectConversation(c.id));
+    msgThreads.appendChild(item);
+  });
+}
+
+function renderMessages(messages) {
+  msgBubbles.innerHTML = '';
+  let pendingDraft = null;
+
+  messages.forEach((m) => {
+    if (m.status === 'pending_approval') { pendingDraft = m; return; }
+    if (m.status === 'discarded') return;
+    const bubble = document.createElement('div');
+    bubble.className = 'admin-msg-bubble'
+      + (m.direction === 'inbound' ? ' is-inbound' : ' is-outbound')
+      + (m.sender === 'ai' ? ' is-ai' : '');
+    bubble.innerHTML = `
+      <p class="admin-msg-bubble-text">${escapeHtml(m.body)}</p>
+      <span class="admin-msg-bubble-meta">${m.sender === 'ai' ? 'Claude · ' : ''}${fmtMsgTime(m.created_at)}</span>
+    `;
+    msgBubbles.appendChild(bubble);
+  });
+  msgBubbles.scrollTop = msgBubbles.scrollHeight;
+
+  if (pendingDraft) {
+    activeDraftId = pendingDraft.id;
+    msgDraftText.textContent = pendingDraft.body;
+    msgDraftBanner.hidden = false;
+  } else {
+    activeDraftId = null;
+    msgDraftBanner.hidden = true;
+  }
+}
+
+async function selectConversation(id) {
+  activeConversationId = id;
+  composerDraftId = null;
+  msgComposerInput.value = '';
+  msgEmptyState.hidden = true;
+  msgThread.hidden = false;
+  renderThreads(latestConversations);
+
+  const convo = latestConversations.find((c) => c.id === id);
+  if (convo) {
+    msgThreadHeader.textContent = `${convo.customer_name || 'Customer'} · ${convo.platform === 'instagram' ? 'Instagram' : 'Facebook'}`;
+  }
+
+  try {
+    const data = await apiFetch(`/api/admin/conversations/${id}/messages`);
+    renderMessages(data.messages || []);
+    if (convo) { convo.unread = 0; renderThreads(latestConversations); }
+  } catch (err) {
+    showMsgMessage(describeError(err), true);
+  }
+}
+
+async function loadConversations() {
+  try {
+    const data = await apiFetch('/api/admin/conversations');
+    latestConversations = data.conversations || [];
+    renderThreads(latestConversations);
+    showMsgMessage(
+      latestConversations.length ? '' : "No conversations yet — once someone messages your Facebook or Instagram, it'll show up here.",
+      false
+    );
+  } catch (err) {
+    showMsgMessage(describeError(err), true);
+  }
+}
+
+async function loadInboxSettings() {
+  try {
+    const data = await apiFetch('/api/admin/settings');
+    autoSendToggle.checked = !!data.auto_send_replies;
+  } catch (err) {
+    // Non-fatal — leave the toggle at its default if this fails to load.
+  }
+}
+
+autoSendToggle.addEventListener('change', async () => {
+  const desired = autoSendToggle.checked;
+  try {
+    await apiFetch('/api/admin/settings', { method: 'POST', body: JSON.stringify({ auto_send_replies: desired }) });
+  } catch (err) {
+    autoSendToggle.checked = !desired;
+    alert(describeError(err));
+  }
+});
+
+msgDraftApprove.addEventListener('click', async () => {
+  if (!activeConversationId || !activeDraftId) return;
+  msgDraftApprove.disabled = true;
+  try {
+    await apiFetch(`/api/admin/conversations/${activeConversationId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ text: msgDraftText.textContent, draft_message_id: activeDraftId }),
+    });
+    selectConversation(activeConversationId);
+    loadConversations();
+  } catch (err) {
+    alert(describeError(err));
+  } finally {
+    msgDraftApprove.disabled = false;
+  }
+});
+
+msgDraftEdit.addEventListener('click', () => {
+  msgComposerInput.value = msgDraftText.textContent;
+  composerDraftId = activeDraftId;
+  msgDraftBanner.hidden = true;
+  msgComposerInput.focus();
+});
+
+msgDraftDiscard.addEventListener('click', async () => {
+  if (!activeDraftId) return;
+  const discardId = activeDraftId;
+  try {
+    await apiFetch(`/api/admin/messages/${discardId}/discard`, { method: 'POST' });
+    selectConversation(activeConversationId);
+  } catch (err) {
+    alert(describeError(err));
+  }
+});
+
+msgComposer.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = msgComposerInput.value.trim();
+  if (!text || !activeConversationId) return;
+  const payload = { text };
+  if (composerDraftId) payload.draft_message_id = composerDraftId;
+
+  const submitBtn = msgComposer.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await apiFetch(`/api/admin/conversations/${activeConversationId}/reply`, { method: 'POST', body: JSON.stringify(payload) });
+    msgComposerInput.value = '';
+    composerDraftId = null;
+    selectConversation(activeConversationId);
+    loadConversations();
+  } catch (err) {
+    alert(describeError(err));
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
 // --- Calendar ----------------------------------------------------------------
 // Reuses whatever's already been fetched for the bookings list (which has no
 // upper date bound — it's "everything from today forward") rather than
@@ -289,8 +487,9 @@ function renderBookings(bookings) {
       const card = document.createElement('div');
       card.className = 'admin-booking-card' + (b.status === 'cancelled' ? ' is-cancelled' : '');
       const svcClass = SERVICE_CLASS[b.service] || '';
-      const cancelBtn = b.status === 'confirmed'
-        ? `<button type="button" class="admin-cancel-btn" data-id="${b.id}">Cancel</button>`
+      const actionHtml = b.status === 'confirmed'
+        ? `<button type="button" class="admin-edit-btn" data-id="${b.id}">Edit</button>
+           <button type="button" class="admin-cancel-btn" data-id="${b.id}">Cancel</button>`
         : `<span class="admin-cancelled-pill">Cancelled</span>`;
 
       card.innerHTML = `
@@ -304,7 +503,7 @@ function renderBookings(bookings) {
           ${b.vehicle ? escapeHtml(b.vehicle) : ''}${b.vehicle && b.location ? ' · ' : ''}${b.location ? escapeHtml(b.location) : ''}
           ${b.message ? `<div class="admin-booking-note">"${escapeHtml(b.message)}"</div>` : ''}
         </div>
-        <div class="admin-booking-action">${cancelBtn}</div>
+        <div class="admin-booking-action">${actionHtml}</div>
       `;
       bookingsWrap.appendChild(card);
     });
@@ -314,6 +513,13 @@ function renderBookings(bookings) {
 }
 
 bookingsList.addEventListener('click', async (e) => {
+  const editBtn = e.target.closest('.admin-edit-btn');
+  if (editBtn) {
+    const booking = latestBookings.find((b) => String(b.id) === editBtn.dataset.id);
+    if (booking) enterEditMode(booking);
+    return;
+  }
+
   const btn = e.target.closest('.admin-cancel-btn');
   if (!btn) return;
   if (!window.confirm('Cancel this booking? This frees up the time slot again.')) return;
@@ -321,6 +527,7 @@ bookingsList.addEventListener('click', async (e) => {
   btn.textContent = 'Cancelling…';
   try {
     await apiFetch(`/api/admin/bookings/${btn.dataset.id}/cancel`, { method: 'POST' });
+    if (editingBookingId !== null && String(editingBookingId) === btn.dataset.id) exitEditMode();
     loadBookings();
   } catch (err) {
     btn.disabled = false;
@@ -331,22 +538,65 @@ bookingsList.addEventListener('click', async (e) => {
 
 showPastToggle.addEventListener('change', loadBookings);
 
-// --- Add booking form ------------------------------------------------------
+// --- Add / edit booking form -------------------------------------------------
 const addBookingForm = document.getElementById('addBookingForm');
 const addBookingStatus = document.getElementById('addBookingStatus');
+const addBookingCard = document.getElementById('addBookingCard');
+const addBookingHeading = document.getElementById('addBookingHeading');
+const addBookingHint = document.getElementById('addBookingHint');
+const addBookingSubmit = document.getElementById('addBookingSubmit');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+const ADD_BOOKING_HINT_DEFAULT = addBookingHint.textContent;
+
+let editingBookingId = null;
+
+function enterEditMode(booking) {
+  editingBookingId = booking.id;
+  addBookingForm.date.value = booking.date;
+  addBookingForm.time_slot.value = booking.time_slot;
+  addBookingForm.service.value = booking.service || '';
+  addBookingForm.name.value = booking.name || '';
+  addBookingForm.phone.value = booking.phone || '';
+  addBookingForm.vehicle.value = booking.vehicle || '';
+  addBookingForm.location.value = booking.location || '';
+  addBookingForm.message.value = booking.message || '';
+
+  addBookingHeading.textContent = `Editing — ${booking.name}`;
+  addBookingHint.textContent = 'Update the details and save. This replaces the original booking (still subject to the 1-hour travel buffer), so a save can still be blocked if the new time overlaps something else.';
+  addBookingSubmit.textContent = 'Save Changes';
+  cancelEditBtn.hidden = false;
+  addBookingCard.classList.add('is-editing');
+  addBookingStatus.textContent = '';
+  addBookingStatus.className = 'admin-status';
+  addBookingCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function exitEditMode() {
+  editingBookingId = null;
+  addBookingForm.reset();
+  addBookingHeading.textContent = 'Add a Booking';
+  addBookingHint.textContent = ADD_BOOKING_HINT_DEFAULT;
+  addBookingSubmit.textContent = 'Add Booking';
+  cancelEditBtn.hidden = true;
+  addBookingCard.classList.remove('is-editing');
+}
+
+cancelEditBtn.addEventListener('click', exitEditMode);
 
 addBookingForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(addBookingForm);
   const payload = Object.fromEntries(fd.entries());
+  const isEditing = editingBookingId !== null;
 
-  addBookingStatus.textContent = 'Adding…';
+  addBookingStatus.textContent = isEditing ? 'Saving…' : 'Adding…';
   addBookingStatus.className = 'admin-status';
   try {
-    await apiFetch('/api/admin/bookings', { method: 'POST', body: JSON.stringify(payload) });
-    addBookingStatus.textContent = 'Booked!';
+    const endpoint = isEditing ? `/api/admin/bookings/${editingBookingId}/edit` : '/api/admin/bookings';
+    await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+    addBookingStatus.textContent = isEditing ? 'Saved!' : 'Booked!';
     addBookingStatus.className = 'admin-status is-success';
-    addBookingForm.reset();
+    exitEditMode();
     loadBookings();
   } catch (err) {
     addBookingStatus.textContent = err.message === 'slot_taken'
@@ -426,3 +676,5 @@ addClosedDayForm.addEventListener('submit', async (e) => {
 renderCalendar();
 loadBookings();
 loadClosedDays();
+loadConversations();
+loadInboxSettings();
