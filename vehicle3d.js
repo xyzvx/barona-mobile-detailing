@@ -7,13 +7,16 @@
 // only there to correct a wrong guess — nothing here is required data for
 // the booking itself.
 //
-// Truck/sedan/coupe are real licensed vehicle models (Ram, 1990 Mercedes
-// 190E Evo II, Lamborghini Countach — bought with commercial-use rights),
-// heavily cut down from their original studio/showroom-detail source files
-// (the Countach alone went from 159 parts and 206k triangles down to ~24k)
-// so they're light enough for a lazy-loaded web widget instead of a
-// close-up render. SUV/van are still Kenney's CC0 Car Kit shapes until
-// their real-model replacements are ready. All of it is stored locally in
+// All 5 types are real licensed vehicle models (Ram, 1990 Mercedes 190E
+// Evo II, Lamborghini Countach, Rezvani Vengeance, Mercedes Sprinter —
+// bought with commercial-use rights), each cut down from its original
+// studio/showroom-detail source file for a lazy-loaded web widget instead
+// of a close-up render — except the Countach, which ships at its full,
+// undecimated 206k-triangle topology (see the coupe note below for why).
+// Every real model also gets a "fresh out of the detail bay" clearcoat
+// finish pass on load (applyLuxuryFinish, below), and the sedan gets an
+// actual paint color since its own source texture didn't bake one in.
+// All of it is stored locally in
 // /models so there's no dependency on a third-party asset host staying up.
 // If a model fails to load for any reason, we fall back to a simple
 // built-from-code shape (buildProceduralCar below) rather than showing
@@ -57,10 +60,32 @@
   //    close to real-world meters, so barely any correction needed.
   //  - coupe (Countach): same Y-up/Z-forward convention, but centered on
   //    its body rather than resting on the ground, so it needs lifting.
-  //  - truck (Ram): looks like a raw single-session photo scan rather than
-  //    a clean CG model (single 394k-triangle mesh, one big baked photo
-  //    texture) — its long axis came in as X instead of the Z everything
-  //    else uses, so it also gets rotated 90° to match.
+  //    Its earlier sparkly/faceted "shattered glass" look turned out to
+  //    have nothing to do with polycount — the source file's own material
+  //    JSON had `alphaMode: "BLEND"` set on ~40 materials including the
+  //    body paint itself (a sloppy setting in this "reworked" file, not an
+  //    intentional design choice — a solid painted body has no business
+  //    being alpha-blended). With blending on, three.js can't reliably
+  //    depth-sort this model's 100+ overlapping mesh parts, so faces
+  //    blend/flicker through each other. Fixed by forcing every non-glass
+  //    material back to opaque and shipping the model at its full,
+  //    undecimated topology (206k triangles — no more grid-decimation
+  //    facets to worry about either).
+  //  - truck (Ram): a raw single-session photogrammetry scan (single
+  //    394k-triangle mesh) rather than a clean CG model — its texture atlas
+  //    turned out to be thousands of tiny disconnected photo-fragment
+  //    islands (that's just how photo scans get UV-unwrapped), which is
+  //    fundamentally incompatible with cutting the mesh down the normal
+  //    way: any decimation joins triangles whose UVs land in unrelated
+  //    atlas islands, and the GPU smears/streaks between them — that, not
+  //    file size, was the real cause of the white/melted/speckled look
+  //    that survived an earlier UV-averaging fix. Fixed properly by baking
+  //    each kept vertex's true color straight off the original photo (at
+  //    its own still-correct UV) into a vertex-color attribute and
+  //    shipping a texture-less material — vertex-color interpolation is a
+  //    plain RGB blend with no atlas to smear across, so it's correct at
+  //    any polycount. Its long axis also came in as X instead of the Z
+  //    everything else uses, so it's rotated 90° to match.
   //  - suv (Rezvani): a Roblox export, positioned far from its own origin
   //    and X-forward — recentered and rotated during conversion.
   //  - van (Sprinter): a 3ds Max export still in Max's native Z-up axis
@@ -100,6 +125,65 @@
     van: 0x3a3a42, // graphite
   };
   const WHEEL_COLOR = 0x161616;
+
+  // "Fresh out of the detail bay" finish pass — run on every real model
+  // after it loads. Only touches each vehicle's actual body-paint
+  // material(s) by name (never glass/tires/interior/trim), giving it a
+  // deeper, glossier clearcoat response so it reads as a just-detailed
+  // showroom shine instead of flat matte plastic. The sedan's own factory
+  // texture came in with no real paint color baked into it, so it also
+  // gets an actual color here — a deep pearl sapphire, distinct from the
+  // truck's black and the van's graphite.
+  const PAINT_MATERIAL_NAMES = {
+    sedan: ['Material'], // the "_ext" body panels: BODY/HOOD/DOOR/BUMPER/MIRROR
+    coupe: ['vehicle_paint1'], // Countach's own body-paint material
+    truck: ['truck-paint-vcolor'], // baked vertex-color body (see below)
+    van: ['carpaint'],
+    // suv intentionally left out — Rezvani's own baked paint already reads
+    // well as-is, so it only gets the light global gloss bump further down.
+  };
+  const SEDAN_PAINT_COLOR = 0x0b2a52;
+
+  function applyLuxuryFinish(car, typeKey) {
+    const paintNames = PAINT_MATERIAL_NAMES[typeKey];
+    const upgraded = new Map(); // original material uuid -> upgraded MeshPhysicalMaterial
+    car.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return;
+      const applyOne = (mat) => {
+        if (!mat) return mat;
+        const isPaint = paintNames && mat.name && paintNames.indexOf(mat.name) !== -1;
+        if (!isPaint) {
+          // Every other real-paint material still gets a very light sheen
+          // bump so the whole car reads "freshly detailed," without
+          // touching color or risking glass/tire/interior looking wrong.
+          if (mat.isMeshStandardMaterial && mat.name && !/glass|tire|neumatico|rubber|interior|seat|cloth|window/i.test(mat.name)) {
+            mat.envMapIntensity = Math.max(mat.envMapIntensity || 1, 1.15);
+            mat.needsUpdate = true;
+          }
+          return mat;
+        }
+        let target = mat;
+        if (!('clearcoat' in mat) && T.MeshPhysicalMaterial) {
+          if (upgraded.has(mat.uuid)) {
+            target = upgraded.get(mat.uuid);
+          } else {
+            target = new T.MeshPhysicalMaterial();
+            target.copy(mat);
+            upgraded.set(mat.uuid, target);
+          }
+        }
+        target.metalness = typeKey === 'truck' ? 0.5 : 0.75;
+        target.roughness = typeKey === 'truck' ? 0.28 : 0.16;
+        target.clearcoat = 1.0;
+        target.clearcoatRoughness = 0.08;
+        target.envMapIntensity = 1.5;
+        if (typeKey === 'sedan' && target.color) target.color.setHex(SEDAN_PAINT_COLOR);
+        target.needsUpdate = true;
+        return target;
+      };
+      obj.material = Array.isArray(obj.material) ? obj.material.map(applyOne) : applyOne(obj.material);
+    });
+  }
 
   // Cheap keyword guesser so the 3D preview can pick itself as soon as
   // someone types their vehicle in, instead of making them tap a button.
@@ -328,7 +412,10 @@
     }
     // Real licensed models (sedan/coupe/truck) keep whatever material the
     // file itself came with — that's the actual paint/texture we paid for,
-    // no reason to paper over it with a flat color.
+    // no reason to paper over it with a flat color. On top of that, give
+    // every real model its "fresh out of the detail bay" clearcoat finish
+    // (and the sedan its actual paint color) — see applyLuxuryFinish above.
+    if (xform.useRealMaterials) applyLuxuryFinish(car, typeKey);
 
     modelCache[typeKey] = car;
     return car;
