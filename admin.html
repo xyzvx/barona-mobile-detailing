@@ -16,12 +16,55 @@
 
 <header class="admin-header">
   <div class="admin-header-inner">
-    <img src="assets/logo-wordmark.png" alt="Barona Mobile Detailing" class="admin-logo">
+    <a href="/" class="admin-logo-link">
+      <img src="assets/logo-wordmark.png" alt="Barona Mobile Detailing" class="admin-logo">
+    </a>
     <span class="admin-title">Admin</span>
+    <a href="/" class="admin-back-link">← Back to site</a>
   </div>
 </header>
 
 <main class="admin-main">
+
+  <!-- OVERVIEW -->
+  <section class="admin-stats" id="adminStats">
+    <div class="admin-stat">
+      <p class="admin-stat-num" id="statToday">—</p>
+      <p class="admin-stat-label">Today</p>
+    </div>
+    <div class="admin-stat">
+      <p class="admin-stat-num" id="statWeek">—</p>
+      <p class="admin-stat-label">Next 7 Days</p>
+    </div>
+    <div class="admin-stat">
+      <p class="admin-stat-num" id="statUpcoming">—</p>
+      <p class="admin-stat-label">All Upcoming</p>
+    </div>
+    <div class="admin-stat">
+      <p class="admin-stat-num" id="statBlocked">—</p>
+      <p class="admin-stat-label">Blocked Days</p>
+    </div>
+  </section>
+
+  <!-- BOOKINGS LIST -->
+  <section class="admin-card">
+    <div class="admin-card-header">
+      <h2>Bookings</h2>
+      <label class="admin-toggle">
+        <input type="checkbox" id="showPastToggle">
+        Show past bookings too
+      </label>
+    </div>
+
+    <div id="bookingsMessage" class="admin-message" hidden></div>
+    <div id="bookingsSkeleton" class="admin-skeleton">
+      <div class="admin-skeleton-row"></div>
+      <div class="admin-skeleton-row"></div>
+      <div class="admin-skeleton-row"></div>
+    </div>
+
+    <div class="admin-bookings-list" id="bookingsList" hidden></div>
+  </section>
 
   <!-- ADD BOOKING -->
   <section class="admin-card">
@@ -69,36 +112,6 @@
         <span id="addBookingStatus" class="admin-status"></span>
       </div>
     </form>
-  </section>
-
-  <!-- BOOKINGS LIST -->
-  <section class="admin-card">
-    <div class="admin-card-header">
-      <h2>Bookings</h2>
-      <label class="admin-toggle">
-        <input type="checkbox" id="showPastToggle">
-        Show past bookings too
-      </label>
-    </div>
-    <div id="bookingsStatus" class="admin-status">Loading…</div>
-    <div class="admin-table-wrap">
-      <table class="admin-table" id="bookingsTable">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Service</th>
-            <th>Customer</th>
-            <th>Vehicle</th>
-            <th>Location</th>
-            <th>Notes</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="bookingsBody"></tbody>
-      </table>
-    </div>
   </section>
 
   <!-- BLOCKED DAYS -->
