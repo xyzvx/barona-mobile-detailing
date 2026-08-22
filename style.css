@@ -533,15 +533,11 @@ img { max-width: 100%; display: block; }
 }
 .form-status { font-size: 0.9rem; font-weight: 600; min-height: 1.2em; }
 
-/* Vehicle-type picker + 3D preview — a little showroom moment while booking */
-.vehicle3d-field { display: grid; gap: 10px; }
-.vehicle3d-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--gray);
-}
+/* Vehicle-type picker + 3D preview — lives right under the Vehicle field so
+   it reads as one continuous "tell us about your vehicle" step, not a
+   separate gimmick section. The type is auto-detected from what's typed in
+   the vehicle input; the pills are just there to correct a guess. */
+.vehicle3d-field { display: grid; gap: 10px; margin-top: -6px; }
 .vehicle3d-picker { display: flex; flex-wrap: wrap; gap: 8px; }
 .vehicle-type-btn {
   font: inherit;
@@ -583,6 +579,15 @@ img { max-width: 100%; display: block; }
   background: var(--black-soft);
 }
 .vehicle3d-hint[hidden] { display: none; }
+.vehicle3d-caption {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--gray);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.vehicle3d-caption[hidden] { display: none; }
 
 /* Booking calendar */
 .calendar-wrap {
