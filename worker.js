@@ -51,6 +51,24 @@ const WEB3FORMS_ACCESS_KEYS = [
   'ed1da520-2d26-4ef9-8693-0090eb09035f',
 ];
 
+// Unified social inbox (Facebook + Instagram DMs/comments -> admin
+// dashboard, with Claude drafting suggested replies). Unlike the constants
+// above, these are genuine secrets and must NOT be hardcoded here — set
+// them as Worker secrets instead (Cloudflare dashboard -> Workers & Pages ->
+// your worker -> Settings -> Variables and Secrets -> "Add" with type
+// "Secret", or `wrangler secret put NAME`). This file only ever reads them
+// off `env`:
+//   ANTHROPIC_API_KEY        - from console.anthropic.com, pays for reply drafting
+//   META_APP_SECRET          - from your Meta Developer app's Basic Settings,
+//                               used to verify incoming webhook requests are
+//                               really from Meta (HMAC signature check)
+//   META_PAGE_ACCESS_TOKEN   - Page access token, lets the Worker send Messenger replies
+//   META_IG_ACCESS_TOKEN     - Instagram-connected token, lets it send IG DM replies
+//   META_WEBHOOK_VERIFY_TOKEN - any string you make up yourself; Meta echoes it
+//                               back during webhook setup so you both confirm
+//                               you're pointing at the right endpoint
+const ANTHROPIC_MODEL = 'claude-sonnet-4-5';
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -60,6 +78,13 @@ export default {
     }
     if (url.pathname === '/api/book' && request.method === 'POST') {
       return handleBook(request, env);
+    }
+
+    if (url.pathname === '/api/webhooks/meta' && request.method === 'GET') {
+      return handleMetaWebhookVerify(url, env);
+    }
+    if (url.pathname === '/api/webhooks/meta' && request.method === 'POST') {
+      return handleMetaWebhookEvent(request, env);
     }
 
     if (url.pathname.startsWith('/api/admin/')) {
@@ -314,6 +339,9 @@ async function handleAdmin(request, env, url) {
   if (sub[0] === 'bookings' && sub.length === 3 && sub[2] === 'cancel' && request.method === 'POST') {
     return adminCancelBooking(env, sub[1]);
   }
+  if (sub[0] === 'bookings' && sub.length === 3 && sub[2] === 'edit' && request.method === 'POST') {
+    return adminEditBooking(request, env, sub[1]);
+  }
   if (sub[0] === 'closed-days' && sub.length === 1 && request.method === 'GET') {
     return adminListClosedDays(env);
   }
@@ -322,6 +350,24 @@ async function handleAdmin(request, env, url) {
   }
   if (sub[0] === 'closed-days' && sub.length === 2 && request.method === 'DELETE') {
     return adminDeleteClosedDay(env, decodeURIComponent(sub[1]));
+  }
+  if (sub[0] === 'conversations' && sub.length === 1 && request.method === 'GET') {
+    return adminListConversations(env);
+  }
+  if (sub[0] === 'conversations' && sub.length === 3 && sub[2] === 'messages' && request.method === 'GET') {
+    return adminGetMessages(env, sub[1]);
+  }
+  if (sub[0] === 'conversations' && sub.length === 3 && sub[2] === 'reply' && request.method === 'POST') {
+    return adminReplyToConversation(request, env, sub[1]);
+  }
+  if (sub[0] === 'messages' && sub.length === 3 && sub[2] === 'discard' && request.method === 'POST') {
+    return adminDiscardDraft(env, sub[1]);
+  }
+  if (sub[0] === 'settings' && sub.length === 1 && request.method === 'GET') {
+    return adminGetSettings(env);
+  }
+  if (sub[0] === 'settings' && sub.length === 1 && request.method === 'POST') {
+    return adminSetSettings(request, env);
   }
 
   return json({ error: 'not_found' }, 404);
@@ -388,6 +434,66 @@ async function adminCreateBooking(request, env) {
   }
 }
 
+// Editing is implemented as "cancel the old row, insert a new one" inside a
+// single D1 batch (D1 batches are real SQL transactions — if either
+// statement fails, both roll back) rather than an in-place UPDATE. That way
+// an edit goes through the exact same overlap + travel-buffer trigger the
+// create flow already uses, instead of needing a second BEFORE UPDATE
+// trigger that duplicates the same rule. Cancelling first also means the
+// trigger's overlap check naturally ignores this booking's own old time
+// slot when the replacement row is inserted, so editing a booking without
+// changing its time doesn't collide with itself.
+async function adminEditBooking(request, env, idStr) {
+  const id = parseInt(idStr, 10);
+  if (!id) return json({ error: 'invalid_id' }, 400);
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+
+  const date = String(body.date || '').trim();
+  const time_slot = String(body.time_slot || '').trim();
+  const serviceKey = String(body.service || '').trim();
+  const name = String(body.name || '').trim();
+  const phone = String(body.phone || '').trim();
+  const vehicle = String(body.vehicle || '').trim();
+  const location = String(body.location || '').trim();
+  const message = String(body.message || '').trim();
+
+  const service = SERVICE_META[serviceKey];
+  if (!name || !phone || !date || !time_slot || !service) {
+    return json({ error: 'missing_fields' }, 400);
+  }
+  if (!isValidDateStr(date)) return json({ error: 'invalid_date' }, 400);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time_slot)) return json({ error: 'invalid_slot' }, 400);
+
+  const existing = await env.DB.prepare(`SELECT id, status FROM bookings WHERE id = ?1`).bind(id).first();
+  if (!existing) return json({ error: 'not_found' }, 404);
+  if (existing.status !== 'confirmed') return json({ error: 'not_editable' }, 400);
+
+  const duration = service.minutes;
+  const end_time = minutesToHHMM(hhmmToMinutes(time_slot) + duration);
+
+  try {
+    const results = await env.DB.batch([
+      env.DB.prepare(`UPDATE bookings SET status = 'cancelled' WHERE id = ?1`).bind(id),
+      env.DB.prepare(
+        `INSERT INTO bookings (date, time_slot, end_time, duration_minutes, service, name, phone, vehicle, location, message)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+      ).bind(date, time_slot, end_time, duration, serviceKey, name, phone, vehicle, location, message),
+    ]);
+    const insertResult = results[1];
+    return json({ success: true, id: insertResult.meta.last_row_id, end_time });
+  } catch (err) {
+    // Trigger blocked the insert (overlap/buffer) — the whole batch rolled
+    // back, so the original booking is still confirmed and untouched.
+    return json({ error: 'slot_taken' }, 409);
+  }
+}
+
 async function adminListClosedDays(env) {
   const res = await env.DB.prepare(`SELECT date, reason FROM closed_days ORDER BY date ASC`).all();
   return json({ closedDays: res.results });
@@ -415,4 +521,278 @@ async function adminDeleteClosedDay(env, date) {
   if (!isValidDateStr(date)) return json({ error: 'invalid_date' }, 400);
   await env.DB.prepare(`DELETE FROM closed_days WHERE date = ?1`).bind(date).run();
   return json({ success: true });
+}
+
+// ---------------------------------------------------------------------
+// Unified social inbox — Facebook + Instagram comments/DMs flow in through
+// the webhook below, Claude drafts a suggested reply, and it waits in the
+// dashboard for a human to approve (or gets auto-sent, once the
+// auto_send_replies setting is switched on).
+
+async function handleMetaWebhookVerify(url, env) {
+  const mode = url.searchParams.get('hub.mode');
+  const token = url.searchParams.get('hub.verify_token');
+  const challenge = url.searchParams.get('hub.challenge') || '';
+  if (mode === 'subscribe' && env.META_WEBHOOK_VERIFY_TOKEN && token === env.META_WEBHOOK_VERIFY_TOKEN) {
+    return new Response(challenge, { status: 200 });
+  }
+  return new Response('forbidden', { status: 403 });
+}
+
+// This endpoint has to be reachable by Meta's servers, so it sits outside
+// Cloudflare Access (which only gates /admin.html and /api/admin/*) — the
+// HMAC signature check here is what stands in for that, confirming a
+// request actually came from Meta and not just anyone who found the URL.
+async function verifyMetaSignature(request, env, rawBody) {
+  const signature = request.headers.get('X-Hub-Signature-256') || '';
+  if (!signature.startsWith('sha256=') || !env.META_APP_SECRET) return false;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.META_APP_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+  const macHex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const given = signature.slice('sha256='.length);
+  if (macHex.length !== given.length) return false;
+  let diff = 0;
+  for (let i = 0; i < macHex.length; i++) diff |= macHex.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
+async function handleMetaWebhookEvent(request, env) {
+  const rawBody = await request.text();
+  if (!(await verifyMetaSignature(request, env, rawBody))) {
+    return json({ error: 'bad_signature' }, 403);
+  }
+
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+
+  const platform = body.object === 'instagram' ? 'instagram' : 'facebook';
+
+  for (const entry of body.entry || []) {
+    for (const event of entry.messaging || []) {
+      const text = event.message && event.message.text;
+      const senderId = event.sender && event.sender.id;
+      // Skip delivery/read receipts and echoes of messages we sent ourselves.
+      if (!text || !senderId || (event.message && event.message.is_echo)) continue;
+
+      const conversationId = await upsertConversation(env, platform, senderId, text);
+      await env.DB.prepare(
+        `INSERT INTO messages (conversation_id, direction, sender, body, status) VALUES (?1, 'inbound', 'customer', ?2, 'sent')`
+      ).bind(conversationId, text).run();
+
+      let draftText;
+      try {
+        draftText = await draftAiReply(env, conversationId);
+      } catch (err) {
+        // Drafting failed (missing/bad API key, rate limit, etc.) — the
+        // inbound message is still saved either way; it just sits with no
+        // suggested reply until you write one by hand.
+        continue;
+      }
+
+      const autoSend = (await getSetting(env, 'auto_send_replies')) === 'true';
+      if (autoSend) {
+        try {
+          const platformMessageId = await sendMetaMessage(platform, senderId, draftText, env);
+          await env.DB.prepare(
+            `INSERT INTO messages (conversation_id, direction, sender, body, status, platform_message_id)
+             VALUES (?1, 'outbound', 'ai', ?2, 'sent', ?3)`
+          ).bind(conversationId, draftText, platformMessageId).run();
+          await touchConversation(env, conversationId, draftText, false);
+          continue;
+        } catch (err) {
+          // Fall through — queue it for approval instead of losing the draft.
+        }
+      }
+
+      await env.DB.prepare(
+        `INSERT INTO messages (conversation_id, direction, sender, body, status) VALUES (?1, 'outbound', 'ai', ?2, 'pending_approval')`
+      ).bind(conversationId, draftText).run();
+      await touchConversation(env, conversationId, text, true);
+    }
+  }
+
+  return json({ received: true });
+}
+
+async function upsertConversation(env, platform, threadId, latestText) {
+  const existing = await env.DB.prepare(
+    `SELECT id FROM conversations WHERE platform = ?1 AND platform_thread_id = ?2`
+  ).bind(platform, threadId).first();
+  if (existing) return existing.id;
+  const result = await env.DB.prepare(
+    `INSERT INTO conversations (platform, platform_thread_id, last_message_preview) VALUES (?1, ?2, ?3)`
+  ).bind(platform, threadId, latestText.slice(0, 140)).run();
+  return result.meta.last_row_id;
+}
+
+async function touchConversation(env, conversationId, previewText, unread) {
+  await env.DB.prepare(
+    `UPDATE conversations SET last_message_at = datetime('now'), last_message_preview = ?1, unread = ?2 WHERE id = ?3`
+  ).bind(previewText.slice(0, 140), unread ? 1 : 0, conversationId).run();
+}
+
+async function getSetting(env, key) {
+  const row = await env.DB.prepare(`SELECT value FROM settings WHERE key = ?1`).bind(key).first();
+  return row ? row.value : null;
+}
+
+function buildBusinessSystemPrompt() {
+  const services = Object.entries(SERVICE_META)
+    .filter(([key]) => key !== 'unsure')
+    .map(([, s]) => `- ${s.label}`)
+    .join('\n');
+  return `You are replying, as Barona Mobile Detailing, to a customer's comment or direct message on Facebook or Instagram. Keep replies short (1-3 sentences), warm, and specific to what they actually asked. Never invent details you don't know — exact same-day availability, a price not listed below, or a confirmed appointment time — instead point them to the online booking calendar on the website, or ask what day/service they want so a human can confirm.
+
+Services and starting prices:
+${services}
+
+Business hours: Monday-Saturday, 9am-5pm. Closed Sundays.
+
+Write like a real person texting back, not a formal email — no signature block, no "Dear customer."`;
+}
+
+async function draftAiReply(env, conversationId) {
+  if (!env.ANTHROPIC_API_KEY) throw new Error('missing_anthropic_key');
+
+  const history = await env.DB.prepare(
+    `SELECT direction, body FROM messages WHERE conversation_id = ?1 ORDER BY created_at DESC LIMIT 10`
+  ).bind(conversationId).all();
+  const recent = history.results.slice().reverse();
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 300,
+      system: buildBusinessSystemPrompt(),
+      messages: recent.map((m) => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.body,
+      })),
+    }),
+  });
+  if (!res.ok) throw new Error(`anthropic_error_${res.status}`);
+  const data = await res.json();
+  const text = (data.content || []).map((block) => block.text || '').join('').trim();
+  return text || "Thanks for reaching out — we'll get back to you shortly!";
+}
+
+// Meta unified the Messenger and Instagram DM Send APIs under the same
+// /me/messages Graph API endpoint for Page-linked accounts; which access
+// token you pass is what determines which inbox it actually sends through.
+async function sendMetaMessage(platform, recipientId, text, env) {
+  const token = platform === 'instagram' ? env.META_IG_ACCESS_TOKEN : env.META_PAGE_ACCESS_TOKEN;
+  if (!token) throw new Error('missing_access_token');
+  const res = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(token)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }),
+  });
+  if (!res.ok) throw new Error(`meta_send_failed_${res.status}`);
+  const data = await res.json();
+  return data.message_id || null;
+}
+
+async function adminListConversations(env) {
+  const res = await env.DB.prepare(
+    `SELECT id, platform, platform_thread_id, customer_name, last_message_at, last_message_preview, unread
+     FROM conversations ORDER BY last_message_at DESC LIMIT 200`
+  ).all();
+  return json({ conversations: res.results });
+}
+
+async function adminGetMessages(env, idStr) {
+  const id = parseInt(idStr, 10);
+  if (!id) return json({ error: 'invalid_id' }, 400);
+  await env.DB.prepare(`UPDATE conversations SET unread = 0 WHERE id = ?1`).bind(id).run();
+  const res = await env.DB.prepare(
+    `SELECT id, direction, sender, body, status, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC`
+  ).bind(id).all();
+  return json({ messages: res.results });
+}
+
+// Sends a reply right now — either a fresh message, or approving (as-is or
+// edited) a pending AI draft by passing its id as draft_message_id.
+async function adminReplyToConversation(request, env, idStr) {
+  const id = parseInt(idStr, 10);
+  if (!id) return json({ error: 'invalid_id' }, 400);
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+  const text = String(body.text || '').trim();
+  const draftMessageId = body.draft_message_id ? parseInt(body.draft_message_id, 10) : null;
+  if (!text) return json({ error: 'missing_text' }, 400);
+
+  const convo = await env.DB.prepare(
+    `SELECT id, platform, platform_thread_id FROM conversations WHERE id = ?1`
+  ).bind(id).first();
+  if (!convo) return json({ error: 'not_found' }, 404);
+
+  let platformMessageId;
+  try {
+    platformMessageId = await sendMetaMessage(convo.platform, convo.platform_thread_id, text, env);
+  } catch (err) {
+    return json({ error: 'send_failed' }, 502);
+  }
+
+  if (draftMessageId) {
+    await env.DB.prepare(
+      `UPDATE messages SET body = ?1, status = 'sent', sender = 'admin', platform_message_id = ?2 WHERE id = ?3`
+    ).bind(text, platformMessageId, draftMessageId).run();
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO messages (conversation_id, direction, sender, body, status, platform_message_id)
+       VALUES (?1, 'outbound', 'admin', ?2, 'sent', ?3)`
+    ).bind(id, text, platformMessageId).run();
+  }
+  await touchConversation(env, id, text, false);
+
+  return json({ success: true });
+}
+
+async function adminDiscardDraft(env, idStr) {
+  const id = parseInt(idStr, 10);
+  if (!id) return json({ error: 'invalid_id' }, 400);
+  await env.DB.prepare(
+    `UPDATE messages SET status = 'discarded' WHERE id = ?1 AND status = 'pending_approval'`
+  ).bind(id).run();
+  return json({ success: true });
+}
+
+async function adminGetSettings(env) {
+  const value = await getSetting(env, 'auto_send_replies');
+  return json({ auto_send_replies: value === 'true' });
+}
+
+async function adminSetSettings(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+  const value = body.auto_send_replies ? 'true' : 'false';
+  await env.DB.prepare(
+    `INSERT INTO settings (key, value) VALUES ('auto_send_replies', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).bind(value).run();
+  return json({ success: true, auto_send_replies: value === 'true' });
 }
