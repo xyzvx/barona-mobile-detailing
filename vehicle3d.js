@@ -40,6 +40,13 @@
   // this and the GLTF loader below share one engine instance instead of
   // loading two separate copies of three.js.
   const GLTF_LOADER_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/loaders/GLTFLoader.js';
+  // A small procedural "studio" environment (no external HDRI download —
+  // it's built entirely from primitives) so glossy/clearcoat/metallic
+  // paint actually has something to reflect. Without this, a low-roughness
+  // material has nothing but flat hemisphere-light fill to bounce back,
+  // which is what was reading as a washed-out, detail-less white sheen on
+  // the sedan/coupe once their paint got a real clearcoat finish.
+  const ROOM_ENV_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/environments/RoomEnvironment.js';
 
   // Real modeled car shapes (see file header) — one per pill. Kenney's kit
   // doesn't have a true "coupe," so that pill uses their sporty hatchback,
@@ -130,10 +137,30 @@
   // after it loads. Only touches each vehicle's actual body-paint
   // material(s) by name (never glass/tires/interior/trim), giving it a
   // deeper, glossier clearcoat response so it reads as a just-detailed
-  // showroom shine instead of flat matte plastic. The sedan's own factory
-  // texture came in with no real paint color baked into it, so it also
-  // gets an actual color here — a deep pearl sapphire, distinct from the
-  // truck's black and the van's graphite.
+  // showroom shine instead of flat matte plastic.
+  //
+  // First pass at this shipped with the numbers a real paint shader
+  // actually needs backwards: it pushed metalness way up (0.75) to fake a
+  // "shiny" look. Car paint itself is NOT metallic (even literal "metallic"
+  // paint is a dielectric base with tiny metal flake, rendered as low
+  // metalness + a clearcoat layer, never a high-metalness base) — a highly
+  // metallic material with no environment to reflect has nothing to show
+  // but a flat, sky-tinted specular wash from the hemisphere light, which
+  // is exactly the "washed out solid white" the sedan/coupe turned into.
+  // Fixed by (a) keeping metalness low and letting clearcoat carry the
+  // shine instead, and (b) giving the scene a real (procedural, no HDRI
+  // download needed) environment to reflect — see RoomEnvironment in
+  // initScene — so a glossy clearcoat has actual surroundings to catch
+  // instead of a flat void.
+  //
+  // The sedan's and coupe's own factory textures didn't give either one a
+  // usable paint color (the sedan's is a near-black bake meant to be
+  // tinted; the coupe's paint texture turned out to be a literal solid-
+  // black 64x64 placeholder swatch — multiplying any tint color against
+  // pure black still comes out black, so tinting alone can't fix it) — so
+  // both get an explicit color AND have their base texture map cleared,
+  // so the color we set is what actually shows instead of getting
+  // multiplied away to near-nothing.
   const PAINT_MATERIAL_NAMES = {
     sedan: ['Material'], // the "_ext" body panels: BODY/HOOD/DOOR/BUMPER/MIRROR
     coupe: ['vehicle_paint1'], // Countach's own body-paint material
@@ -142,10 +169,18 @@
     // suv intentionally left out — Rezvani's own baked paint already reads
     // well as-is, so it only gets the light global gloss bump further down.
   };
-  const SEDAN_PAINT_COLOR = 0x0b2a52;
+  // Explicit color overrides — only for the two whose own source texture
+  // can't be trusted to carry real paint color (see above). Truck keeps
+  // its baked-from-the-real-photo vertex colors (it's a black truck in
+  // real life); van and SUV keep their own file's paint as-is.
+  const PAINT_COLOR_OVERRIDE = {
+    sedan: 0x0b2a52, // deep pearl sapphire
+    coupe: 0x9c0f1c, // Lamborghini-red
+  };
 
   function applyLuxuryFinish(car, typeKey) {
     const paintNames = PAINT_MATERIAL_NAMES[typeKey];
+    const colorOverride = PAINT_COLOR_OVERRIDE[typeKey];
     const upgraded = new Map(); // original material uuid -> upgraded MeshPhysicalMaterial
     car.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return;
@@ -157,7 +192,7 @@
           // bump so the whole car reads "freshly detailed," without
           // touching color or risking glass/tire/interior looking wrong.
           if (mat.isMeshStandardMaterial && mat.name && !/glass|tire|neumatico|rubber|interior|seat|cloth|window/i.test(mat.name)) {
-            mat.envMapIntensity = Math.max(mat.envMapIntensity || 1, 1.15);
+            mat.envMapIntensity = Math.max(mat.envMapIntensity || 1, 1.1);
             mat.needsUpdate = true;
           }
           return mat;
@@ -172,12 +207,17 @@
             upgraded.set(mat.uuid, target);
           }
         }
-        target.metalness = typeKey === 'truck' ? 0.5 : 0.75;
-        target.roughness = typeKey === 'truck' ? 0.28 : 0.16;
-        target.clearcoat = 1.0;
-        target.clearcoatRoughness = 0.08;
-        target.envMapIntensity = 1.5;
-        if (typeKey === 'sedan' && target.color) target.color.setHex(SEDAN_PAINT_COLOR);
+        // Low metalness — this is painted body panel, not bare metal —
+        // with clearcoat doing the actual "wet, just-detailed" shine work.
+        target.metalness = 0.18;
+        target.roughness = 0.38;
+        target.clearcoat = 0.85;
+        target.clearcoatRoughness = 0.18;
+        target.envMapIntensity = 1.2;
+        if (colorOverride != null && target.color) {
+          target.color.setHex(colorOverride);
+          target.map = null; // don't let a near-black/broken bake multiply our color away
+        }
         target.needsUpdate = true;
         return target;
       };
@@ -349,6 +389,7 @@
 
   let T = null;
   let GLTFLoaderClass = null;
+  let RoomEnvironmentClass = null;
   let threeLoadPromise = null;
   let scene, camera, renderer;
   let currentCar = null;
@@ -368,6 +409,12 @@
         GLTFLoaderClass = loaderMod.GLTFLoader;
       } catch (err) {
         GLTFLoaderClass = null; // real models unavailable — procedural fallback still works
+      }
+      try {
+        const envMod = await import(ROOM_ENV_URL);
+        RoomEnvironmentClass = envMod.RoomEnvironment;
+      } catch (err) {
+        RoomEnvironmentClass = null; // no studio reflections — materials just look a bit flatter
       }
       return threeMod;
     });
@@ -596,6 +643,23 @@
     if (T.ACESFilmicToneMapping) renderer.toneMapping = T.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     if (T.SRGBColorSpace) renderer.outputColorSpace = T.SRGBColorSpace;
+
+    // Bake a small procedural "studio" environment so glossy/clearcoat/
+    // metallic paint has real surroundings to reflect instead of just flat
+    // light fill — this is what turns a shiny material from a washed-out
+    // white smear into an actual convincing "wet paint" highlight. Wrapped
+    // defensively: if this fails for any reason the car still renders
+    // fine, just a touch flatter.
+    if (RoomEnvironmentClass && T.PMREMGenerator) {
+      try {
+        const pmrem = new T.PMREMGenerator(renderer);
+        const envScene = new RoomEnvironmentClass();
+        scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+        pmrem.dispose();
+      } catch (err) {
+        // no studio reflections this run — materials just look a bit flatter
+      }
+    }
 
     scene.add(new T.HemisphereLight(0xfff6df, 0x11151c, 2.4));
     const key = new T.DirectionalLight(0xffffff, 3.6);
