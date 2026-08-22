@@ -1,0 +1,163 @@
+/* Barona Mobile Detailing — admin dashboard styles.
+   Reuses the color/font variables from style.css (linked before this file
+   in admin.html) but keeps its own simpler layout — this page is a working
+   tool for the two of you, not a marketing page, so it favors density and
+   clarity over the polish on the public site. */
+
+.admin-body { background: var(--black); min-height: 100vh; }
+
+.admin-header {
+  background: var(--black-soft);
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0;
+}
+.admin-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.admin-logo { height: 34px; width: auto; }
+.admin-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--gold);
+  font-size: 1.1rem;
+}
+
+.admin-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  display: grid;
+  gap: 28px;
+}
+
+.admin-card {
+  background: var(--black-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+.admin-card h2 {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.admin-hint { color: var(--gray); font-size: 0.88rem; margin: 0 0 18px; }
+
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--gray);
+  cursor: pointer;
+}
+
+.admin-form { display: grid; gap: 14px; }
+.admin-form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.admin-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.admin-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--gray);
+}
+.admin-form input,
+.admin-form select {
+  font: inherit;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--black);
+  color: var(--white);
+}
+.admin-form input:focus,
+.admin-form select:focus {
+  outline: 1px solid var(--gold);
+  outline-offset: 1px;
+}
+.admin-form-actions { display: flex; align-items: center; gap: 14px; }
+
+.admin-status { font-size: 0.85rem; font-weight: 600; color: var(--gray); }
+.admin-dim { color: var(--gray-dim); font-size: 0.82rem; }
+
+.admin-table-wrap { overflow-x: auto; }
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 780px;
+}
+.admin-table th, .admin-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.admin-table thead th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray);
+  font-weight: 600;
+}
+.admin-table tbody tr:hover { background: rgba(247,246,243,0.03); }
+.admin-table tr.is-cancelled { opacity: 0.45; }
+
+.admin-cancel-btn, .admin-remove-btn {
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-cancel-btn:hover, .admin-remove-btn:hover { background: var(--red); color: var(--white); }
+.admin-cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.admin-closed-list {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.admin-closed-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 640px) {
+  .admin-main { padding: 24px 16px 60px; }
+  .admin-card { padding: 20px; }
+}

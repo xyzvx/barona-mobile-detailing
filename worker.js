@@ -18,6 +18,20 @@ const OPEN_MIN = 9 * 60;    // 9:00 AM
 const CLOSE_MIN = 17 * 60;  // 5:00 PM
 const STEP_MIN = 60;        // offer start times on the hour
 const CLOSED_WEEKDAY = 0;   // Sunday (0 = Sunday in JS Date)
+const TRAVEL_BUFFER_MIN = 60; // required gap between any two bookings, for driving between jobs
+
+// Admin dashboard (/admin.html + /api/admin/*) is gated at the Cloudflare
+// edge by Cloudflare Access, which only lets these two people log in at
+// all. This list is a second, defense-in-depth check inside the Worker
+// itself: Access injects the authenticated user's email into every request
+// it lets through, and we double-check it's actually one of these two
+// before touching any admin data. Replace with your real emails before
+// deploying, and make sure they match exactly what you set up in the
+// Cloudflare Access policy.
+const ADMIN_EMAILS = [
+  'edgarbaronaofficial@gmail.com',
+  'newnewdu@proton.me',
+];
 
 const SERVICE_META = {
   exterior: { label: 'Exterior Detail — $200', minutes: 180 },
@@ -47,6 +61,17 @@ export default {
     if (url.pathname === '/api/book' && request.method === 'POST') {
       return handleBook(request, env);
     }
+
+    if (url.pathname.startsWith('/api/admin/')) {
+      // Cloudflare Access should already be blocking anyone but the two of
+      // you from reaching this far — this is the second check behind it.
+      const adminEmail = request.headers.get('Cf-Access-Authenticated-User-Email');
+      if (!adminEmail || !ADMIN_EMAILS.includes(adminEmail.toLowerCase())) {
+        return json({ error: 'forbidden' }, 403);
+      }
+      return handleAdmin(request, env, url, adminEmail);
+    }
+
     if (url.pathname.startsWith('/api/')) {
       return json({ error: 'not_found' }, 404);
     }
@@ -161,7 +186,14 @@ async function handleAvailability(env, url) {
     const openSlots = allStarts
       .filter((start) => {
         const end = minutesToHHMM(hhmmToMinutes(start) + duration);
-        return !existing.some((b) => overlaps(start, end, b.start, b.end));
+        // Buffer each existing booking by TRAVEL_BUFFER_MIN on both sides —
+        // leaves enough driving time whether the new job would come right
+        // before or right after an existing one.
+        return !existing.some((b) => {
+          const bStart = minutesToHHMM(hhmmToMinutes(b.start) - TRAVEL_BUFFER_MIN);
+          const bEnd = minutesToHHMM(hhmmToMinutes(b.end) + TRAVEL_BUFFER_MIN);
+          return overlaps(start, end, bStart, bEnd);
+        });
       })
       .map((start) => {
         const end = minutesToHHMM(hhmmToMinutes(start) + duration);
@@ -258,4 +290,129 @@ async function handleBook(request, env) {
   );
 
   return json({ success: true, date, time_slot, end_time, label, service: service.label });
+}
+
+// ---------------------------------------------------------------------
+// Admin dashboard API — everything under /api/admin/*. Cloudflare Access
+// gates this at the edge (only the two allowed emails can even reach the
+// Worker), and the ADMIN_EMAILS check in the router above double-checks
+// that. These handlers intentionally skip some of the customer-facing
+// guardrails (hour-grid time slots, closed-day/Sunday blocks) — this is a
+// trusted internal tool for the two of you to override the calendar when
+// needed (a phone-in booking at an odd time, a one-off exception on a
+// closed day, etc). The overlap + travel-buffer protection still applies
+// either way, since it lives in the database trigger itself.
+async function handleAdmin(request, env, url) {
+  const sub = url.pathname.split('/').filter(Boolean).slice(2); // drop 'api','admin'
+
+  if (sub[0] === 'bookings' && sub.length === 1 && request.method === 'GET') {
+    return adminListBookings(env, url);
+  }
+  if (sub[0] === 'bookings' && sub.length === 1 && request.method === 'POST') {
+    return adminCreateBooking(request, env);
+  }
+  if (sub[0] === 'bookings' && sub.length === 3 && sub[2] === 'cancel' && request.method === 'POST') {
+    return adminCancelBooking(env, sub[1]);
+  }
+  if (sub[0] === 'closed-days' && sub.length === 1 && request.method === 'GET') {
+    return adminListClosedDays(env);
+  }
+  if (sub[0] === 'closed-days' && sub.length === 1 && request.method === 'POST') {
+    return adminAddClosedDay(request, env);
+  }
+  if (sub[0] === 'closed-days' && sub.length === 2 && request.method === 'DELETE') {
+    return adminDeleteClosedDay(env, decodeURIComponent(sub[1]));
+  }
+
+  return json({ error: 'not_found' }, 404);
+}
+
+async function adminListBookings(env, url) {
+  // Defaults to everything from today onward; ?from=YYYY-MM-DD&to=YYYY-MM-DD
+  // widens the range (useful for looking back at past jobs).
+  const from = url.searchParams.get('from') || '2000-01-01';
+  const to = url.searchParams.get('to') || '2999-12-31';
+  const res = await env.DB.prepare(
+    `SELECT id, date, time_slot, end_time, duration_minutes, service, name, phone, vehicle, location, message, status, created_at
+     FROM bookings
+     WHERE date BETWEEN ?1 AND ?2
+     ORDER BY date ASC, time_slot ASC`
+  ).bind(from, to).all();
+  return json({ bookings: res.results });
+}
+
+async function adminCancelBooking(env, idStr) {
+  const id = parseInt(idStr, 10);
+  if (!id) return json({ error: 'invalid_id' }, 400);
+  await env.DB.prepare(`UPDATE bookings SET status = 'cancelled' WHERE id = ?1`).bind(id).run();
+  return json({ success: true });
+}
+
+async function adminCreateBooking(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+
+  const date = String(body.date || '').trim();
+  const time_slot = String(body.time_slot || '').trim();
+  const serviceKey = String(body.service || '').trim();
+  const name = String(body.name || '').trim();
+  const phone = String(body.phone || '').trim();
+  const vehicle = String(body.vehicle || '').trim();
+  const location = String(body.location || '').trim();
+  const message = String(body.message || '').trim();
+
+  const service = SERVICE_META[serviceKey];
+  if (!name || !phone || !date || !time_slot || !service) {
+    return json({ error: 'missing_fields' }, 400);
+  }
+  if (!isValidDateStr(date)) return json({ error: 'invalid_date' }, 400);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time_slot)) return json({ error: 'invalid_slot' }, 400);
+
+  const duration = service.minutes;
+  const end_time = minutesToHHMM(hhmmToMinutes(time_slot) + duration);
+
+  try {
+    const result = await env.DB.prepare(
+      `INSERT INTO bookings (date, time_slot, end_time, duration_minutes, service, name, phone, vehicle, location, message)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+    ).bind(date, time_slot, end_time, duration, serviceKey, name, phone, vehicle, location, message).run();
+    return json({ success: true, id: result.meta.last_row_id, end_time });
+  } catch (err) {
+    // Same trigger the customer-facing booking flow hits — this time range
+    // (including the travel buffer) overlaps an existing confirmed booking.
+    return json({ error: 'slot_taken' }, 409);
+  }
+}
+
+async function adminListClosedDays(env) {
+  const res = await env.DB.prepare(`SELECT date, reason FROM closed_days ORDER BY date ASC`).all();
+  return json({ closedDays: res.results });
+}
+
+async function adminAddClosedDay(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+  const date = String(body.date || '').trim();
+  const reason = String(body.reason || '').trim();
+  if (!isValidDateStr(date)) return json({ error: 'invalid_date' }, 400);
+
+  await env.DB.prepare(
+    `INSERT INTO closed_days (date, reason) VALUES (?1, ?2)
+     ON CONFLICT(date) DO UPDATE SET reason = excluded.reason`
+  ).bind(date, reason || null).run();
+  return json({ success: true });
+}
+
+async function adminDeleteClosedDay(env, date) {
+  if (!isValidDateStr(date)) return json({ error: 'invalid_date' }, 400);
+  await env.DB.prepare(`DELETE FROM closed_days WHERE date = ?1`).bind(date).run();
+  return json({ success: true });
 }
