@@ -38,7 +38,15 @@
 <!-- Lets the 3D vehicle preview's loader module resolve "three" to the
      exact same three.js build it already loads, instead of a duplicate
      copy — required for GLTFLoader.js (pulled from a CDN that hosts the
-     full package) to share one engine instance with vehicle3d.js. -->
+     full package) to share one engine instance with vehicle3d.js.
+     IMPORTANT: the site's Content-Security-Policy (in _headers) has no
+     'unsafe-inline' for scripts, so this block only runs because its exact
+     contents are allow-listed there by SHA-256 hash. If you ever edit the
+     JSON below — even by a single space or a version bump — that hash stops
+     matching and this silently gets blocked, breaking the whole 3D preview
+     with a generic "couldn't load" message and no visible error to a normal
+     visitor. Recompute the hash and update _headers' script-src in the same
+     change if this block changes. -->
 <script type="importmap">
 {
   "imports": {
