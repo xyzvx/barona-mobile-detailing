@@ -519,8 +519,10 @@
           <label>Phone
             <input type="tel" name="phone" required>
           </label>
+          <label>Vehicle (year/make/model)
+            <input type="text" name="vehicle" id="vehicleInput" placeholder="e.g. 2019 Honda Civic" autocomplete="off">
+          </label>
           <div class="vehicle3d-field">
-            <span class="vehicle3d-label">What are we detailing? (optional — just for fun)</span>
             <div class="vehicle3d-picker" id="vehicle3dPicker">
               <button type="button" class="vehicle-type-btn" data-vehicle-type="sedan">Sedan</button>
               <button type="button" class="vehicle-type-btn" data-vehicle-type="suv">SUV</button>
@@ -532,11 +534,8 @@
               <canvas id="vehicle3dCanvas"></canvas>
               <p class="vehicle3d-hint" id="vehicle3dHint" hidden></p>
             </div>
+            <p class="vehicle3d-caption" id="vehicle3dCaption" hidden>Picked automatically from what you typed above — tap a type to change it.</p>
           </div>
-
-          <label>Vehicle (year/make/model)
-            <input type="text" name="vehicle">
-          </label>
           <label>Address / Location
             <input type="text" name="location" placeholder="Where should we come to you?">
           </label>
