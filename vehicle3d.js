@@ -1,24 +1,48 @@
 // Barona Mobile Detailing — vehicle-type 3D preview
-// Purely a fun, optional touch on the booking form: pick a generic vehicle
-// shape and see a small rotating low-poly model of it, with a gold "just
-// detailed" shine light sweeping across as it turns. Nothing here is
-// required data for the booking — the actual year/make/model is still the
-// plain text field right below it.
+// Purely a fun, optional touch on the booking form, folded right into the
+// "Vehicle (year/make/model)" field: as soon as someone types their vehicle
+// in, we guess the body style from keywords (F-150 → truck, Explorer → SUV,
+// etc., defaulting to sedan) and pop up a small rotating low-poly model with
+// a gold "just detailed" shine light sweeping across it. The pills underneath
+// are only there to correct a wrong guess — nothing here is required data
+// for the booking itself.
 //
 // Three.js loads lazily (as an ES module, dynamically imported) only once
-// someone actually clicks a vehicle-type button, so nobody pays for this on
-// page load if they never touch it. If it fails to load for any reason
-// (slow connection, ad blocker, older browser), the booking form still
-// works fine without it — this never blocks or breaks the actual booking.
+// someone actually has a model to show, so nobody pays for this on page
+// load if they never touch the vehicle field. If it fails to load for any
+// reason (slow connection, ad blocker, older browser), the booking form
+// still works fine without it — this never blocks or breaks the actual
+// booking.
 
 (function () {
   const picker = document.getElementById('vehicle3dPicker');
   const wrap = document.getElementById('vehicle3dWrap');
   const canvas = document.getElementById('vehicle3dCanvas');
   const hint = document.getElementById('vehicle3dHint');
+  const caption = document.getElementById('vehicle3dCaption');
+  const vehicleInput = document.getElementById('vehicleInput');
   if (!picker || !wrap || !canvas || !hint) return;
 
   const THREE_MODULE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.185.1/three.module.min.js';
+
+  // Cheap keyword guesser so the 3D preview can pick itself as soon as
+  // someone types their vehicle in, instead of making them tap a button.
+  // The pills stay on-screen so a wrong guess (or a model we don't
+  // recognize) can be corrected in one tap.
+  const TYPE_KEYWORDS = {
+    truck: ['f-150', 'f150', 'f-250', 'f250', 'f-350', 'f350', 'silverado', 'sierra', 'ram 1500', 'ram 2500', 'ram 3500', 'ram1500', 'tacoma', 'tundra', 'ranger', 'colorado', 'ridgeline', 'frontier', 'titan', 'gladiator', ' pickup', 'pickup truck'],
+    suv: ['explorer', 'tahoe', 'suburban', 'expedition', 'yukon', 'escalade', 'highlander', '4runner', 'pilot', 'cr-v', 'crv', 'rav4', 'rav-4', 'wrangler', 'grand cherokee', 'cherokee', 'durango', 'pathfinder', 'telluride', 'palisade', 'santa fe', 'tucson', 'forester', 'outback', 'xc90', 'xc60', 'bronco', 'blazer', 'equinox', 'traverse', 'atlas', 'tiguan', 'suv', 'cx-5', 'cx-9', 'rogue', 'murano', 'ascent'],
+    van: ['sprinter', 'transit', 'odyssey', 'sienna', 'pacifica', 'express van', 'savana', 'promaster', 'caravan', 'minivan', ' van'],
+    coupe: ['mustang', 'camaro', 'corvette', 'challenger', 'brz', ' 86', 'gt86', 'miata', 'mx-5', 'supra', '911', 'coupe'],
+  };
+
+  function detectVehicleType(text) {
+    const t = ' ' + text.toLowerCase() + ' ';
+    for (const type of Object.keys(TYPE_KEYWORDS)) {
+      if (TYPE_KEYWORDS[type].some((kw) => t.includes(kw))) return type;
+    }
+    return null;
+  }
 
   const VEHICLE_TYPES = {
     sedan: {
@@ -174,8 +198,10 @@
 
   async function selectType(typeKey, btn) {
     picker.querySelectorAll('.vehicle-type-btn').forEach((b) => b.classList.remove('is-active'));
+    if (!btn) btn = picker.querySelector(`[data-vehicle-type="${typeKey}"]`);
     if (btn) btn.classList.add('is-active');
     wrap.hidden = false;
+    if (caption) caption.hidden = false;
 
     if (!initialized) {
       hint.hidden = false;
@@ -201,7 +227,39 @@
     setCar(typeKey);
   }
 
+  function clearPreview() {
+    picker.querySelectorAll('.vehicle-type-btn').forEach((b) => b.classList.remove('is-active'));
+    wrap.hidden = true;
+    if (caption) caption.hidden = true;
+  }
+
+  // Manual pills always win — a tap here means "no, I know better than the
+  // guess," and typing more afterward shouldn't fight the user about it.
+  let manualOverride = false;
   picker.querySelectorAll('.vehicle-type-btn').forEach((btn) => {
-    btn.addEventListener('click', () => selectType(btn.dataset.vehicleType, btn));
+    btn.addEventListener('click', () => {
+      manualOverride = true;
+      selectType(btn.dataset.vehicleType, btn);
+    });
   });
+
+  // Auto-detect from the vehicle text field so the 3D model just appears as
+  // people type — no extra tap needed unless the guess is wrong.
+  if (vehicleInput) {
+    let debounceId = null;
+    vehicleInput.addEventListener('input', () => {
+      if (manualOverride) return;
+      const raw = vehicleInput.value.trim();
+      window.clearTimeout(debounceId);
+      if (!raw) {
+        clearPreview();
+        return;
+      }
+      if (raw.length < 3) return;
+      debounceId = window.setTimeout(() => {
+        const type = detectVehicleType(raw) || 'sedan';
+        selectType(type, null);
+      }, 350);
+    });
+  }
 })();
