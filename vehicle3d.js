@@ -44,39 +44,147 @@
     return null;
   }
 
-  const VEHICLE_TYPES = {
+  // Each body style is defined as two "lofts": a row of control points
+  // (t = 0 front bumper → 1 rear bumper, w/h = actual width/height in scene
+  // units at that point along the car) for the painted body, and a second
+  // set for the glass greenhouse that sits on top of it. buildLoftGroup()
+  // below samples these at fine steps and stitches together many thin
+  // slices, which is what turns two flat boxes into an actual rounded
+  // hood-cowl-roof-decklid silhouette instead of a couple of Minecraft
+  // blocks stacked on each other.
+  const PROFILE = {
     sedan: {
-      body: { w: 1.9, h: 0.55, l: 4.4, y: 0.55 },
-      cabin: { w: 1.7, h: 0.5, l: 2.0, y: 0.95, z: -0.1 },
-      wheelR: 0.35,
-      wheelZ: [-1.55, 1.55],
-    },
-    suv: {
-      body: { w: 2.0, h: 0.75, l: 4.5, y: 0.75 },
-      cabin: { w: 1.85, h: 0.75, l: 3.0, y: 1.35, z: -0.2 },
-      wheelR: 0.42,
-      wheelZ: [-1.6, 1.6],
-    },
-    truck: {
-      body: { w: 2.0, h: 0.6, l: 5.2, y: 0.6 },
-      cabin: { w: 1.85, h: 0.75, l: 1.8, y: 1.25, z: -1.5 },
-      bed: { w: 1.9, h: 0.3, l: 2.6, y: 1.0, z: 1.1 },
-      wheelR: 0.42,
-      wheelZ: [-1.8, 1.8],
-    },
-    van: {
-      body: { w: 2.0, h: 0.55, l: 4.6, y: 0.55 },
-      cabin: { w: 1.9, h: 1.05, l: 4.0, y: 1.35, z: 0.1 },
-      wheelR: 0.4,
-      wheelZ: [-1.6, 1.6],
+      length: 4.5, wheelR: 0.34, wheelZFrac: [0.15, 0.87], mirrorT: 0.34,
+      body: [
+        { t: 0.00, w: 0.75, h: 0.18 }, { t: 0.05, w: 1.55, h: 0.22 },
+        { t: 0.13, w: 1.85, h: 0.38 }, { t: 0.24, w: 1.78, h: 0.46 },
+        { t: 0.34, w: 1.72, h: 0.55 }, { t: 0.50, w: 1.80, h: 0.58 },
+        { t: 0.66, w: 1.72, h: 0.54 }, { t: 0.77, w: 1.65, h: 0.44 },
+        { t: 0.87, w: 1.50, h: 0.30 }, { t: 0.94, w: 1.15, h: 0.22 },
+        { t: 1.00, w: 0.70, h: 0.16 },
+      ],
+      greenhouse: [
+        { t: 0.00, w: 0, h: 0 }, { t: 0.31, w: 0, h: 0 },
+        { t: 0.36, w: 1.55, h: 0.35 }, { t: 0.44, w: 1.68, h: 0.58 },
+        { t: 0.55, w: 1.72, h: 0.64 }, { t: 0.65, w: 1.62, h: 0.55 },
+        { t: 0.74, w: 1.30, h: 0.28 }, { t: 0.80, w: 0, h: 0 },
+        { t: 1.00, w: 0, h: 0 },
+      ],
     },
     coupe: {
-      body: { w: 1.85, h: 0.5, l: 4.3, y: 0.5 },
-      cabin: { w: 1.6, h: 0.4, l: 1.6, y: 0.82, z: -0.35 },
-      wheelR: 0.36,
-      wheelZ: [-1.5, 1.5],
+      length: 4.3, wheelR: 0.32, wheelZFrac: [0.14, 0.86], mirrorT: 0.35,
+      body: [
+        { t: 0.00, w: 0.70, h: 0.16 }, { t: 0.05, w: 1.50, h: 0.20 },
+        { t: 0.12, w: 1.80, h: 0.34 }, { t: 0.22, w: 1.74, h: 0.42 },
+        { t: 0.32, w: 1.68, h: 0.50 }, { t: 0.48, w: 1.75, h: 0.52 },
+        { t: 0.62, w: 1.68, h: 0.48 }, { t: 0.74, w: 1.60, h: 0.38 },
+        { t: 0.85, w: 1.45, h: 0.26 }, { t: 0.93, w: 1.10, h: 0.20 },
+        { t: 1.00, w: 0.65, h: 0.14 },
+      ],
+      greenhouse: [
+        { t: 0.00, w: 0, h: 0 }, { t: 0.33, w: 0, h: 0 },
+        { t: 0.38, w: 1.45, h: 0.28 }, { t: 0.46, w: 1.60, h: 0.48 },
+        { t: 0.55, w: 1.62, h: 0.53 }, { t: 0.64, w: 1.52, h: 0.44 },
+        { t: 0.72, w: 1.20, h: 0.20 }, { t: 0.76, w: 0, h: 0 },
+        { t: 1.00, w: 0, h: 0 },
+      ],
+    },
+    suv: {
+      length: 4.7, wheelR: 0.40, wheelZFrac: [0.14, 0.90], mirrorT: 0.32,
+      body: [
+        { t: 0.00, w: 0.85, h: 0.30 }, { t: 0.05, w: 1.70, h: 0.36 },
+        { t: 0.12, w: 2.00, h: 0.56 }, { t: 0.22, w: 1.95, h: 0.66 },
+        { t: 0.32, w: 1.92, h: 0.76 }, { t: 0.50, w: 1.98, h: 0.78 },
+        { t: 0.68, w: 1.92, h: 0.76 }, { t: 0.80, w: 1.88, h: 0.66 },
+        { t: 0.89, w: 1.75, h: 0.48 }, { t: 0.95, w: 1.35, h: 0.34 },
+        { t: 1.00, w: 0.80, h: 0.26 },
+      ],
+      greenhouse: [
+        { t: 0.00, w: 0, h: 0 }, { t: 0.29, w: 0, h: 0 },
+        { t: 0.34, w: 1.70, h: 0.40 }, { t: 0.42, w: 1.85, h: 0.72 },
+        { t: 0.55, w: 1.88, h: 0.84 }, { t: 0.70, w: 1.85, h: 0.82 },
+        { t: 0.80, w: 1.70, h: 0.66 }, { t: 0.86, w: 1.40, h: 0.30 },
+        { t: 0.90, w: 0, h: 0 }, { t: 1.00, w: 0, h: 0 },
+      ],
+    },
+    van: {
+      length: 4.8, wheelR: 0.38, wheelZFrac: [0.10, 0.92], mirrorT: 0.14,
+      body: [
+        { t: 0.00, w: 0.90, h: 0.24 }, { t: 0.04, w: 1.75, h: 0.28 },
+        { t: 0.09, w: 2.00, h: 0.42 }, { t: 0.18, w: 1.98, h: 0.50 },
+        { t: 0.30, w: 1.98, h: 0.55 }, { t: 0.55, w: 2.00, h: 0.55 },
+        { t: 0.75, w: 1.96, h: 0.52 }, { t: 0.88, w: 1.85, h: 0.40 },
+        { t: 0.95, w: 1.50, h: 0.28 }, { t: 1.00, w: 0.90, h: 0.22 },
+      ],
+      greenhouse: [
+        { t: 0.00, w: 0, h: 0 }, { t: 0.09, w: 0, h: 0 },
+        { t: 0.14, w: 1.85, h: 0.55 }, { t: 0.22, w: 1.95, h: 1.15 },
+        { t: 0.40, w: 1.98, h: 1.30 }, { t: 0.65, w: 1.98, h: 1.30 },
+        { t: 0.82, w: 1.92, h: 1.15 }, { t: 0.90, w: 1.60, h: 0.55 },
+        { t: 0.94, w: 0, h: 0 }, { t: 1.00, w: 0, h: 0 },
+      ],
+    },
+    truck: {
+      length: 5.3, wheelR: 0.40, wheelZFrac: [0.16, 0.86], mirrorT: 0.16,
+      bed: { t: 0.70, len: 2.4 },
+      body: [
+        { t: 0.00, w: 0.85, h: 0.28 }, { t: 0.04, w: 1.70, h: 0.34 },
+        { t: 0.10, w: 2.00, h: 0.52 }, { t: 0.18, w: 1.95, h: 0.60 },
+        { t: 0.28, w: 1.92, h: 0.62 }, { t: 0.40, w: 1.95, h: 0.60 },
+        { t: 0.44, w: 1.90, h: 0.52 }, { t: 0.50, w: 1.90, h: 0.50 },
+        { t: 0.75, w: 1.88, h: 0.50 }, { t: 0.92, w: 1.85, h: 0.48 },
+        { t: 0.97, w: 1.60, h: 0.40 }, { t: 1.00, w: 1.30, h: 0.34 },
+      ],
+      greenhouse: [
+        { t: 0.00, w: 0, h: 0 }, { t: 0.13, w: 0, h: 0 },
+        { t: 0.17, w: 1.75, h: 0.45 }, { t: 0.24, w: 1.88, h: 0.85 },
+        { t: 0.32, w: 1.88, h: 0.93 }, { t: 0.38, w: 1.70, h: 0.55 },
+        { t: 0.42, w: 0, h: 0 }, { t: 1.00, w: 0, h: 0 },
+      ],
     },
   };
+
+  // Piecewise-linear lookup along a profile's control points.
+  function interp(points, t, key) {
+    if (t <= points[0].t) return points[0][key];
+    const last = points[points.length - 1];
+    if (t >= last.t) return last[key];
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i], b = points[i + 1];
+      if (t >= a.t && t <= b.t) {
+        const span = b.t - a.t;
+        const u = span > 0 ? (t - a.t) / span : 0;
+        return a[key] + (b[key] - a[key]) * u;
+      }
+    }
+    return last[key];
+  }
+
+  // Samples a profile into many thin box slices and stitches them into one
+  // group — a "loft" built from safe, well-understood primitives instead of
+  // hand-rolled triangle geometry, so there's no risk of inverted normals or
+  // holes. yBaseFn lets a second loft (the greenhouse) sit directly on top
+  // of the first one's (the body's) surface at each point along the car.
+  function buildLoftGroup(points, opts) {
+    const { length, zStart, material, steps, yBaseFn } = opts;
+    const group = new T.Group();
+    for (let i = 0; i < steps; i++) {
+      const t0 = i / steps;
+      const t1 = (i + 1) / steps;
+      const tm = (t0 + t1) / 2;
+      const w = interp(points, tm, 'w');
+      const h = interp(points, tm, 'h');
+      if (w < 0.02 || h < 0.02) continue; // skip near-zero taper slivers
+      const z0 = zStart + t0 * length;
+      const z1 = zStart + t1 * length;
+      const segLen = (z1 - z0) + 0.015; // tiny overlap so slices don't gap
+      const yBase = yBaseFn ? yBaseFn(tm) : 0;
+      const box = new T.Mesh(new T.BoxGeometry(w, h, segLen), material);
+      box.position.set(0, yBase + h / 2, (z0 + z1) / 2);
+      group.add(box);
+    }
+    return group;
+  }
 
   let T = null;
   let threeLoadPromise = null;
@@ -99,43 +207,91 @@
   }
 
   function buildCar(typeKey) {
-    const cfg = VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.sedan;
+    const cfg = PROFILE[typeKey] || PROFILE.sedan;
     const group = new T.Group();
+    const zStart = -cfg.length / 2;
 
     const bodyMat = new T.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.55, roughness: 0.28 });
-    const glassMat = new T.MeshStandardMaterial({ color: 0x0d1a22, metalness: 0.2, roughness: 0.1, transparent: true, opacity: 0.85 });
-    const wheelMat = new T.MeshStandardMaterial({ color: 0x111111, metalness: 0.2, roughness: 0.8 });
+    const glassMat = new T.MeshStandardMaterial({ color: 0x0d1a22, metalness: 0.2, roughness: 0.1, transparent: true, opacity: 0.82 });
+    const tireMat = new T.MeshStandardMaterial({ color: 0x111111, metalness: 0.1, roughness: 0.9 });
+    const hubMat = new T.MeshStandardMaterial({ color: 0xb9b9b9, metalness: 0.85, roughness: 0.3 });
     const trimMat = new T.MeshStandardMaterial({ color: 0xc9a24c, metalness: 0.9, roughness: 0.25 });
+    const headlightMat = new T.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xfff2c8, emissiveIntensity: 0.5, roughness: 0.4 });
+    const taillightMat = new T.MeshStandardMaterial({ color: 0x3a0000, emissive: 0xaa1414, emissiveIntensity: 0.7, roughness: 0.4 });
+    const bedLinerMat = new T.MeshStandardMaterial({ color: 0x161616, metalness: 0.2, roughness: 0.85 });
 
-    const body = new T.Mesh(new T.BoxGeometry(cfg.body.w, cfg.body.h, cfg.body.l), bodyMat);
-    body.position.y = cfg.body.y;
-    group.add(body);
+    // The painted body — a rounded hood-to-decklid silhouette lofted from
+    // many thin slices instead of one flat box.
+    group.add(buildLoftGroup(cfg.body, { length: cfg.length, zStart, material: bodyMat, steps: 22 }));
 
-    const cabin = new T.Mesh(new T.BoxGeometry(cfg.cabin.w, cfg.cabin.h, cfg.cabin.l), glassMat);
-    cabin.position.set(0, cfg.cabin.y, cfg.cabin.z || 0);
-    group.add(cabin);
+    // The glass greenhouse, sitting directly on the body's roofline with
+    // its own sloped windshield/backlite taper.
+    group.add(buildLoftGroup(cfg.greenhouse, {
+      length: cfg.length, zStart, material: glassMat, steps: 18,
+      yBaseFn: (t) => interp(cfg.body, t, 'h'),
+    }));
 
-    if (cfg.bed) {
-      const bed = new T.Mesh(new T.BoxGeometry(cfg.bed.w, cfg.bed.h, cfg.bed.l), bodyMat);
-      bed.position.set(0, cfg.bed.y, cfg.bed.z);
-      group.add(bed);
-    }
-
-    // Thin gold trim line — a little brand touch, and it's what catches the
-    // rim light as the car turns (the "just detailed" shine).
-    const trim = new T.Mesh(new T.BoxGeometry(cfg.body.w + 0.02, 0.04, cfg.body.l - 0.2), trimMat);
-    trim.position.y = cfg.body.y + cfg.body.h / 2 - 0.02;
+    // Gold beltline trim — a brand touch, and what catches the rim light as
+    // the car turns (the "just detailed" shine). The mid-body is close to
+    // flat on every profile, so one straight strip reads fine here.
+    const trimY = interp(cfg.body, 0.5, 'h');
+    const trimW = interp(cfg.body, 0.5, 'w') + 0.03;
+    const trim = new T.Mesh(new T.BoxGeometry(trimW, 0.03, cfg.length * 0.34), trimMat);
+    trim.position.set(0, trimY, 0);
     group.add(trim);
 
-    const halfW = cfg.body.w / 2 - 0.05;
-    cfg.wheelZ.forEach((z) => {
+    // Wheels — dark tire plus a lighter hub cap poking through both faces.
+    cfg.wheelZFrac.forEach((frac) => {
+      const z = zStart + frac * cfg.length;
+      const halfW = interp(cfg.body, frac, 'w') / 2 - 0.03;
       [-1, 1].forEach((side) => {
-        const wheel = new T.Mesh(new T.CylinderGeometry(cfg.wheelR, cfg.wheelR, 0.32, 20), wheelMat);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(side * halfW, cfg.wheelR, z);
-        group.add(wheel);
+        const tire = new T.Mesh(new T.CylinderGeometry(cfg.wheelR, cfg.wheelR, 0.3, 18), tireMat);
+        tire.rotation.z = Math.PI / 2;
+        tire.position.set(side * halfW, cfg.wheelR, z);
+        group.add(tire);
+        const hub = new T.Mesh(new T.CylinderGeometry(cfg.wheelR * 0.45, cfg.wheelR * 0.45, 0.32, 14), hubMat);
+        hub.rotation.z = Math.PI / 2;
+        hub.position.set(side * halfW, cfg.wheelR, z);
+        group.add(hub);
       });
     });
+
+    // Headlights and taillights at the very front/rear tips.
+    const frontT = 0.05, rearT = 0.95;
+    [-1, 1].forEach((side) => {
+      const fx = side * (interp(cfg.body, frontT, 'w') / 2 - 0.1);
+      const fy = interp(cfg.body, frontT, 'h') * 0.6;
+      const headlight = new T.Mesh(new T.BoxGeometry(0.12, 0.09, 0.05), headlightMat);
+      headlight.position.set(fx, fy, zStart + frontT * cfg.length);
+      group.add(headlight);
+
+      const rx = side * (interp(cfg.body, rearT, 'w') / 2 - 0.1);
+      const ry = interp(cfg.body, rearT, 'h') * 0.65;
+      const taillight = new T.Mesh(new T.BoxGeometry(0.12, 0.1, 0.05), taillightMat);
+      taillight.position.set(rx, ry, zStart + rearT * cfg.length);
+      group.add(taillight);
+    });
+
+    // Side mirrors sprouting from the base of the windshield.
+    const mirrorT = cfg.mirrorT;
+    const mirrorHalfW = interp(cfg.body, mirrorT, 'w') / 2;
+    const mirrorY = interp(cfg.body, mirrorT, 'h') + 0.14;
+    [-1, 1].forEach((side) => {
+      const mirror = new T.Mesh(new T.BoxGeometry(0.08, 0.06, 0.14), bodyMat);
+      mirror.position.set(side * (mirrorHalfW + 0.06), mirrorY, zStart + mirrorT * cfg.length);
+      group.add(mirror);
+    });
+
+    // Truck bed — a dark inset "liner" panel to fake an open cargo bed
+    // instead of a solid block.
+    if (cfg.bed) {
+      const liner = new T.Mesh(
+        new T.BoxGeometry(interp(cfg.body, cfg.bed.t, 'w') - 0.12, 0.03, cfg.bed.len),
+        bedLinerMat
+      );
+      liner.position.set(0, interp(cfg.body, cfg.bed.t, 'h') - 0.02, zStart + cfg.bed.t * cfg.length);
+      group.add(liner);
+    }
 
     return group;
   }
