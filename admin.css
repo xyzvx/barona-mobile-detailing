@@ -19,13 +19,22 @@
   align-items: center;
   gap: 16px;
 }
+.admin-logo-link { display: flex; align-items: center; }
 .admin-logo { height: 34px; width: auto; }
 .admin-title {
   font-family: var(--font-serif);
   font-style: italic;
   color: var(--gold);
   font-size: 1.1rem;
+  flex: 1;
 }
+.admin-back-link {
+  color: var(--gray);
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.admin-back-link:hover { color: var(--gold); }
 
 .admin-main {
   max-width: 1200px;
@@ -33,6 +42,34 @@
   padding: 32px 24px 80px;
   display: grid;
   gap: 28px;
+}
+
+/* --- Stats overview ------------------------------------------------------ */
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.admin-stat {
+  background: var(--black-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  text-align: center;
+}
+.admin-stat-num {
+  font-family: var(--font-serif);
+  font-size: 2.1rem;
+  color: var(--gold);
+  margin: 0 0 4px;
+  line-height: 1;
+}
+.admin-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray);
+  margin: 0;
 }
 
 .admin-card {
@@ -98,30 +135,151 @@
 .admin-form-actions { display: flex; align-items: center; gap: 14px; }
 
 .admin-status { font-size: 0.85rem; font-weight: 600; color: var(--gray); }
+.admin-status.is-success { color: var(--green); }
+.admin-status.is-error { color: var(--red); }
 .admin-dim { color: var(--gray-dim); font-size: 0.82rem; }
 
-.admin-table-wrap { overflow-x: auto; }
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  min-width: 780px;
-}
-.admin-table th, .admin-table td {
-  padding: 12px 14px;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-.admin-table thead th {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+/* --- Bookings: message / skeleton / empty states -------------------------- */
+.admin-message {
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  background: rgba(247,246,243,0.04);
+  border: 1px solid var(--line);
   color: var(--gray);
-  font-weight: 600;
+  margin-bottom: 18px;
 }
-.admin-table tbody tr:hover { background: rgba(247,246,243,0.03); }
-.admin-table tr.is-cancelled { opacity: 0.45; }
+.admin-message.is-error {
+  background: var(--red-bg);
+  border-color: rgba(179,69,60,0.4);
+  color: #e3a49e;
+}
+
+.admin-skeleton { display: grid; gap: 10px; }
+.admin-skeleton[hidden] { display: none; }
+.admin-skeleton-row {
+  height: 68px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(247,246,243,0.03) 25%, rgba(247,246,243,0.07) 37%, rgba(247,246,243,0.03) 63%);
+  background-size: 400% 100%;
+  animation: admin-shimmer 1.4s ease infinite;
+}
+@keyframes admin-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* --- Bookings: day-grouped card list --------------------------------------- */
+.admin-bookings-list { display: grid; gap: 26px; }
+.admin-bookings-list[hidden] { display: none; }
+
+.admin-day-group + .admin-day-group { padding-top: 4px; }
+.admin-day-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-day-date {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--white);
+  font-size: 1.05rem;
+}
+.admin-day-count {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray);
+}
+.admin-day-bookings { display: grid; gap: 10px; }
+
+.admin-booking-card {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.admin-booking-card:hover { background: rgba(247,246,243,0.03); }
+.admin-booking-card.is-cancelled {
+  border-left-color: var(--red);
+  opacity: 0.5;
+}
+.admin-booking-time {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+}
+.admin-booking-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.admin-booking-name { font-weight: 600; color: var(--white); }
+.admin-booking-phone { color: var(--gray); font-size: 0.85rem; }
+.admin-booking-meta {
+  grid-column: 2;
+  color: var(--gray);
+  font-size: 0.82rem;
+  margin-top: -4px;
+}
+.admin-booking-note {
+  color: var(--gray-dim);
+  font-style: italic;
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+.admin-booking-action { display: flex; align-items: center; }
+
+.admin-svc-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.admin-svc-badge.svc-exterior { background: rgba(60,138,92,0.16); color: #7fc79b; }
+.admin-svc-badge.svc-interior { background: rgba(201,162,76,0.16); color: var(--gold); }
+.admin-svc-badge.svc-full { background: rgba(179,69,60,0.18); color: #e3897d; }
+.admin-svc-badge.svc-unsure { background: rgba(247,246,243,0.08); color: var(--gray); }
+
+.admin-cancelled-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gray-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 720px) {
+  .admin-booking-card {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "time action"
+      "main main"
+      "meta meta";
+  }
+  .admin-booking-time { grid-area: time; }
+  .admin-booking-action { grid-area: action; justify-self: end; }
+  .admin-booking-main { grid-area: main; }
+  .admin-booking-meta { grid-area: meta; grid-column: auto; }
+}
 
 .admin-cancel-btn, .admin-remove-btn {
   background: transparent;
@@ -160,4 +318,7 @@
 @media (max-width: 640px) {
   .admin-main { padding: 24px 16px 60px; }
   .admin-card { padding: 20px; }
+  .admin-stats { grid-template-columns: repeat(2, 1fr); }
+  .admin-stat { padding: 16px 12px; }
+  .admin-stat-num { font-size: 1.7rem; }
 }
