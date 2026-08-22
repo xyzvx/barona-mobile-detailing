@@ -31,6 +31,8 @@ const TRAVEL_BUFFER_MIN = 60; // required gap between any two bookings, for driv
 const ADMIN_EMAILS = [
   'edgarbaronaofficial@gmail.com',
   'newnewdu@proton.me',
+  'mo1ses@proton.me',
+  'baronamobiledetailing@gmail.com',
 ];
 
 const SERVICE_META = {
