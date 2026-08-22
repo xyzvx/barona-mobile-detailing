@@ -46,6 +46,24 @@
     </div>
   </section>
 
+  <!-- CALENDAR -->
+  <section class="admin-card">
+    <div class="admin-card-header">
+      <h2>Calendar</h2>
+      <div class="admin-cal-nav">
+        <button type="button" class="admin-cal-btn" id="calPrev" aria-label="Previous month">‹</button>
+        <span class="admin-cal-label" id="calLabel">—</span>
+        <button type="button" class="admin-cal-btn" id="calNext" aria-label="Next month">›</button>
+        <button type="button" class="admin-cal-today" id="calToday">Today</button>
+      </div>
+    </div>
+    <p class="admin-hint">Click any day with bookings to jump to it in the list below. Navigate forward as far ahead as you like — the next few months, or the next year.</p>
+    <div class="admin-cal-weekdays">
+      <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+    </div>
+    <div class="admin-cal-grid" id="calGrid"></div>
+  </section>
+
   <!-- BOOKINGS LIST -->
   <section class="admin-card">
     <div class="admin-card-header">
