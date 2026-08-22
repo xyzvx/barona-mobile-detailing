@@ -519,6 +519,21 @@
           <label>Phone
             <input type="tel" name="phone" required>
           </label>
+          <div class="vehicle3d-field">
+            <span class="vehicle3d-label">What are we detailing? (optional — just for fun)</span>
+            <div class="vehicle3d-picker" id="vehicle3dPicker">
+              <button type="button" class="vehicle-type-btn" data-vehicle-type="sedan">Sedan</button>
+              <button type="button" class="vehicle-type-btn" data-vehicle-type="suv">SUV</button>
+              <button type="button" class="vehicle-type-btn" data-vehicle-type="truck">Truck</button>
+              <button type="button" class="vehicle-type-btn" data-vehicle-type="van">Van</button>
+              <button type="button" class="vehicle-type-btn" data-vehicle-type="coupe">Coupe</button>
+            </div>
+            <div class="vehicle3d-wrap" id="vehicle3dWrap" hidden>
+              <canvas id="vehicle3dCanvas"></canvas>
+              <p class="vehicle3d-hint" id="vehicle3dHint" hidden></p>
+            </div>
+          </div>
+
           <label>Vehicle (year/make/model)
             <input type="text" name="vehicle">
           </label>
@@ -566,5 +581,6 @@
 <script src="calendar.js"></script>
 <script src="script.js"></script>
 <script src="interactions.js"></script>
+<script src="vehicle3d.js"></script>
 </body>
 </html>
