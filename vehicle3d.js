@@ -133,25 +133,29 @@
   };
   const WHEEL_COLOR = 0x161616;
 
-  // "Fresh out of the detail bay" finish pass — run on every real model
-  // after it loads. Only touches each vehicle's actual body-paint
-  // material(s) by name (never glass/tires/interior/trim), giving it a
-  // deeper, glossier clearcoat response so it reads as a just-detailed
-  // showroom shine instead of flat matte plastic.
+  // Body-paint finish pass — run on every real model after it loads. Only
+  // touches each vehicle's actual body-paint material(s) by name (never
+  // glass/tires/interior/trim).
   //
-  // First pass at this shipped with the numbers a real paint shader
-  // actually needs backwards: it pushed metalness way up (0.75) to fake a
-  // "shiny" look. Car paint itself is NOT metallic (even literal "metallic"
-  // paint is a dielectric base with tiny metal flake, rendered as low
-  // metalness + a clearcoat layer, never a high-metalness base) — a highly
-  // metallic material with no environment to reflect has nothing to show
-  // but a flat, sky-tinted specular wash from the hemisphere light, which
-  // is exactly the "washed out solid white" the sedan/coupe turned into.
-  // Fixed by (a) keeping metalness low and letting clearcoat carry the
-  // shine instead, and (b) giving the scene a real (procedural, no HDRI
-  // download needed) environment to reflect — see RoomEnvironment in
-  // initScene — so a glossy clearcoat has actual surroundings to catch
-  // instead of a flat void.
+  // This has been through two wrong tunings already, both for the same
+  // underlying reason — anything that adds extra reflectivity on top of a
+  // real render environment (the RoomEnvironment set up in initScene) can
+  // completely bury the base paint color under a bright reflection, no
+  // matter what that color is set to:
+  //   1st pass: metalness pushed up to 0.75 to fake "shiny." Car paint
+  //      isn't metallic (even "metallic" paint is dielectric + flake, low
+  //      metalness); a highly metallic surface with no environment just
+  //      shows a flat sky-tinted wash — read as solid white.
+  //   2nd pass: added the studio environment (good, still here) but paired
+  //      it with a strong clearcoat (0.85 factor, glossy 0.18 roughness) —
+  //      clearcoat is a literal extra reflective layer sitting on top of
+  //      the base color, and that combo reflected back enough light to
+  //      bury the color again, even though it WAS being set correctly.
+  // This pass deliberately does neither: plain moderate metalness/
+  // roughness, clearcoat forced off, so the actual paint color is what
+  // renders. A gloss/clearcoat layer is worth adding back later, but as
+  // its own careful, separately-verified step — not bundled with getting
+  // the base color right in the first place.
   //
   // The sedan's and coupe's own factory textures didn't give either one a
   // usable paint color (the sedan's is a near-black bake meant to be
@@ -181,7 +185,6 @@
   function applyLuxuryFinish(car, typeKey) {
     const paintNames = PAINT_MATERIAL_NAMES[typeKey];
     const colorOverride = PAINT_COLOR_OVERRIDE[typeKey];
-    const upgraded = new Map(); // original material uuid -> upgraded MeshPhysicalMaterial
     car.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return;
       const applyOne = (mat) => {
@@ -197,23 +200,27 @@
           }
           return mat;
         }
+        // Step 1: get the actual paint COLOR right, full stop — no
+        // clearcoat here yet. Clearcoat is a literal extra reflective
+        // layer sitting on top of the base color, and with the studio
+        // environment now lighting the scene, a strong clearcoat
+        // (0.85 factor, glossy 0.18 roughness) turned out to reflect
+        // enough light back that it visually buried the base color
+        // entirely — the sedan went solid white even though its color
+        // WAS being set correctly underneath. Once this plain, flat-out
+        // correct-color pass is confirmed good, the gloss/shine layer
+        // goes back on top as its own separate, more careful step
+        // (matching what was actually asked for: fix the paint, then
+        // gloss it — not both at once).
         let target = mat;
-        if (!('clearcoat' in mat) && T.MeshPhysicalMaterial) {
-          if (upgraded.has(mat.uuid)) {
-            target = upgraded.get(mat.uuid);
-          } else {
-            target = new T.MeshPhysicalMaterial();
-            target.copy(mat);
-            upgraded.set(mat.uuid, target);
-          }
+        if (T.MeshPhysicalMaterial && target.isMeshPhysicalMaterial) {
+          // a previous round already upgraded this material — undo the
+          // clearcoat so it stops hiding the color while we verify.
+          target.clearcoat = 0;
         }
-        // Low metalness — this is painted body panel, not bare metal —
-        // with clearcoat doing the actual "wet, just-detailed" shine work.
-        target.metalness = 0.18;
-        target.roughness = 0.38;
-        target.clearcoat = 0.85;
-        target.clearcoatRoughness = 0.18;
-        target.envMapIntensity = 1.2;
+        target.metalness = 0.25;
+        target.roughness = 0.5;
+        target.envMapIntensity = 0.5;
         if (colorOverride != null && target.color) {
           target.color.setHex(colorOverride);
           target.map = null; // don't let a near-black/broken bake multiply our color away
