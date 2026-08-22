@@ -46,6 +46,44 @@
     </div>
   </section>
 
+  <!-- MESSAGES -->
+  <section class="admin-card">
+    <div class="admin-card-header">
+      <h2>Messages</h2>
+      <label class="admin-toggle">
+        <input type="checkbox" id="autoSendToggle">
+        Auto-send AI replies
+      </label>
+    </div>
+    <p class="admin-hint">Facebook &amp; Instagram comments and DMs land here. Claude drafts a suggested reply for each one — approve it, edit it first, or write your own. Once you trust the drafts, flip the switch above to send them automatically.</p>
+
+    <div id="msgMessage" class="admin-message" hidden></div>
+
+    <div class="admin-msg-layout">
+      <div class="admin-msg-threads" id="msgThreads"></div>
+      <div class="admin-msg-panel">
+        <div class="admin-msg-empty" id="msgEmptyState">Select a conversation to view it here.</div>
+        <div class="admin-msg-thread" id="msgThread" hidden>
+          <div class="admin-msg-thread-header" id="msgThreadHeader"></div>
+          <div class="admin-msg-bubbles" id="msgBubbles"></div>
+          <div class="admin-msg-draft" id="msgDraftBanner" hidden>
+            <p class="admin-msg-draft-label">Claude's suggested reply</p>
+            <p class="admin-msg-draft-text" id="msgDraftText"></p>
+            <div class="admin-msg-draft-actions">
+              <button type="button" class="btn btn-primary" id="msgDraftApprove">Send as-is</button>
+              <button type="button" class="admin-edit-btn" id="msgDraftEdit">Edit first</button>
+              <button type="button" class="admin-cancel-btn" id="msgDraftDiscard">Discard</button>
+            </div>
+          </div>
+          <form class="admin-msg-composer" id="msgComposer">
+            <textarea id="msgComposerInput" placeholder="Type a reply…" rows="2"></textarea>
+            <button type="submit" class="btn btn-primary">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CALENDAR -->
   <section class="admin-card">
     <div class="admin-card-header">
@@ -84,10 +122,10 @@
     <div class="admin-bookings-list" id="bookingsList" hidden></div>
   </section>
 
-  <!-- ADD BOOKING -->
-  <section class="admin-card">
-    <h2>Add a Booking</h2>
-    <p class="admin-hint">For phone-in or walk-up customers. This skips the customer-facing rules (hour-grid times, closed days) — you can book any time or day — but the 1-hour travel buffer between jobs still applies.</p>
+  <!-- ADD / EDIT BOOKING -->
+  <section class="admin-card" id="addBookingCard">
+    <h2 id="addBookingHeading">Add a Booking</h2>
+    <p class="admin-hint" id="addBookingHint">For phone-in or walk-up customers. This skips the customer-facing rules (hour-grid times, closed days) — you can book any time or day — but the 1-hour travel buffer between jobs still applies.</p>
     <form id="addBookingForm" class="admin-form">
       <div class="admin-form-row">
         <label>Date
@@ -126,7 +164,8 @@
         </label>
       </div>
       <div class="admin-form-actions">
-        <button type="submit" class="btn btn-primary">Add Booking</button>
+        <button type="submit" class="btn btn-primary" id="addBookingSubmit">Add Booking</button>
+        <button type="button" class="admin-cancel-edit-btn" id="cancelEditBtn" hidden>Cancel edit</button>
         <span id="addBookingStatus" class="admin-status"></span>
       </div>
     </form>
