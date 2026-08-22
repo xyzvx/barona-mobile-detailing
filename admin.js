@@ -94,6 +94,113 @@ async function apiFetch(path, options) {
   return data;
 }
 
+// --- Calendar ----------------------------------------------------------------
+// Reuses whatever's already been fetched for the bookings list (which has no
+// upper date bound — it's "everything from today forward") rather than
+// making a separate request, so browsing months ahead is instant.
+const calGrid = document.getElementById('calGrid');
+const calLabel = document.getElementById('calLabel');
+const calPrevBtn = document.getElementById('calPrev');
+const calNextBtn = document.getElementById('calNext');
+const calTodayBtn = document.getElementById('calToday');
+
+let latestBookings = [];
+let closedDaySet = new Set();
+let calCursor = new Date(todayStr() + 'T00:00:00Z');
+calCursor.setUTCDate(1);
+
+function toDateStr(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderCalendar() {
+  const year = calCursor.getUTCFullYear();
+  const month = calCursor.getUTCMonth();
+  calLabel.textContent = calCursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  const countsByDate = {};
+  latestBookings.forEach((b) => {
+    if (b.status !== 'confirmed') return;
+    countsByDate[b.date] = (countsByDate[b.date] || 0) + 1;
+  });
+
+  const startWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const today = todayStr();
+  const totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+
+  calGrid.innerHTML = '';
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startWeekday + 1;
+    const cell = document.createElement('div');
+
+    if (dayNum < 1 || dayNum > daysInMonth) {
+      cell.className = 'admin-cal-cell is-outside';
+      calGrid.appendChild(cell);
+      continue;
+    }
+
+    const dateStr = toDateStr(year, month, dayNum);
+    const count = countsByDate[dateStr] || 0;
+    const isClosed = closedDaySet.has(dateStr);
+    const isToday = dateStr === today;
+    const isPast = dateStr < today;
+
+    cell.className = 'admin-cal-cell'
+      + (isToday ? ' is-today' : '')
+      + (isClosed ? ' is-closed' : '')
+      + (isPast ? ' is-past' : '')
+      + (count > 0 ? ' has-bookings' : '');
+    cell.innerHTML = `
+      <span class="admin-cal-daynum">${dayNum}</span>
+      ${isClosed ? '<span class="admin-cal-flag">Closed</span>' : ''}
+      ${count > 0 ? `<span class="admin-cal-count">${count} booking${count === 1 ? '' : 's'}</span>` : ''}
+    `;
+
+    if (count > 0) {
+      cell.setAttribute('role', 'button');
+      cell.tabIndex = 0;
+      cell.addEventListener('click', () => jumpToDay(dateStr));
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jumpToDay(dateStr); }
+      });
+    }
+
+    calGrid.appendChild(cell);
+  }
+}
+
+function jumpToDay(dateStr) {
+  const target = bookingsList.querySelector(`[data-day-group="${dateStr}"]`);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.classList.add('is-flash');
+    setTimeout(() => target.classList.remove('is-flash'), 1200);
+    return;
+  }
+  // The day has bookings (per the calendar count) but isn't in the currently
+  // rendered list — that only happens for a past date while "show past" is
+  // off. Flip it on and retry once the list re-renders.
+  if (dateStr < todayStr() && showPastToggle && !showPastToggle.checked) {
+    showPastToggle.checked = true;
+    loadBookings().then(() => jumpToDay(dateStr));
+  }
+}
+
+calPrevBtn.addEventListener('click', () => {
+  calCursor.setUTCMonth(calCursor.getUTCMonth() - 1);
+  renderCalendar();
+});
+calNextBtn.addEventListener('click', () => {
+  calCursor.setUTCMonth(calCursor.getUTCMonth() + 1);
+  renderCalendar();
+});
+calTodayBtn.addEventListener('click', () => {
+  calCursor = new Date(todayStr() + 'T00:00:00Z');
+  calCursor.setUTCDate(1);
+  renderCalendar();
+});
+
 // --- Bookings list ---------------------------------------------------------
 const bookingsList = document.getElementById('bookingsList');
 const bookingsSkeleton = document.getElementById('bookingsSkeleton');
@@ -123,6 +230,8 @@ async function loadBookings() {
     const bookings = data.bookings || [];
     renderBookings(bookings);
     updateStats(bookings, showPastToggle.checked);
+    latestBookings = bookings;
+    renderCalendar();
 
     if (!bookings.length) showBookingsMessage('No bookings in this range.', false);
   } catch (err) {
@@ -166,6 +275,7 @@ function renderBookings(bookings) {
     const groupEl = document.createElement('div');
     groupEl.className = 'admin-day-group';
     const confirmedCount = group.items.filter((b) => b.status === 'confirmed').length;
+    groupEl.dataset.dayGroup = group.date;
     groupEl.innerHTML = `
       <div class="admin-day-header">
         <span class="admin-day-date">${fmtDayHeader(group.date)}</span>
@@ -254,8 +364,11 @@ const addClosedDayStatus = document.getElementById('addClosedDayStatus');
 async function loadClosedDays() {
   try {
     const data = await apiFetch('/api/admin/closed-days');
-    renderClosedDays(data.closedDays || []);
-    statBlocked.textContent = (data.closedDays || []).length;
+    const days = data.closedDays || [];
+    renderClosedDays(days);
+    statBlocked.textContent = days.length;
+    closedDaySet = new Set(days.map((d) => d.date));
+    renderCalendar();
   } catch (err) {
     closedDaysList.innerHTML = `<li class="admin-dim">${escapeHtml(describeError(err))}</li>`;
     statBlocked.textContent = '—';
@@ -310,5 +423,6 @@ addClosedDayForm.addEventListener('submit', async (e) => {
 });
 
 // --- init ------------------------------------------------------------------
+renderCalendar();
 loadBookings();
 loadClosedDays();
