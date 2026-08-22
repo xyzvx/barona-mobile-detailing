@@ -139,6 +139,107 @@
 .admin-status.is-error { color: var(--red); }
 .admin-dim { color: var(--gray-dim); font-size: 0.82rem; }
 
+/* --- Calendar -------------------------------------------------------------- */
+.admin-cal-nav { display: flex; align-items: center; gap: 10px; }
+.admin-cal-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--white);
+  font-size: 1rem;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.admin-cal-btn:hover { border-color: var(--gold); color: var(--gold); }
+.admin-cal-today {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--gray);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.admin-cal-today:hover { border-color: var(--gold); color: var(--gold); }
+.admin-cal-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--white);
+  font-size: 1.05rem;
+  min-width: 150px;
+  text-align: center;
+}
+
+.admin-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 18px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray);
+  text-align: center;
+}
+.admin-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+.admin-cal-cell {
+  min-height: 66px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--black);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.admin-cal-cell.is-outside { background: transparent; border-color: transparent; }
+.admin-cal-cell.is-past { opacity: 0.5; }
+.admin-cal-daynum { font-size: 0.8rem; color: var(--gray); font-weight: 600; }
+.admin-cal-cell.is-today { border-color: var(--gold); }
+.admin-cal-cell.is-today .admin-cal-daynum { color: var(--gold); }
+.admin-cal-cell.has-bookings { cursor: pointer; }
+.admin-cal-cell.has-bookings:hover { background: rgba(247,246,243,0.04); border-color: var(--gold); }
+.admin-cal-cell.is-closed { border-color: rgba(179,69,60,0.4); }
+.admin-cal-count {
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--gold);
+  background: rgba(201,162,76,0.14);
+  border-radius: 100px;
+  padding: 2px 7px;
+}
+.admin-cal-flag {
+  align-self: flex-start;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #e3897d;
+  background: rgba(179,69,60,0.16);
+  border-radius: 100px;
+  padding: 2px 7px;
+}
+
+/* Momentary highlight when jumping here from a calendar click. */
+.admin-day-group.is-flash { border-radius: 10px; animation: admin-cal-jump 1.4s ease; }
+@keyframes admin-cal-jump {
+  0% { background: rgba(201,162,76,0.12); }
+  100% { background: transparent; }
+}
+
 /* --- Bookings: message / skeleton / empty states -------------------------- */
 .admin-message {
   padding: 14px 16px;
@@ -321,4 +422,9 @@
   .admin-stats { grid-template-columns: repeat(2, 1fr); }
   .admin-stat { padding: 16px 12px; }
   .admin-stat-num { font-size: 1.7rem; }
+  .admin-cal-cell { min-height: 48px; padding: 5px; gap: 3px; }
+  .admin-cal-daynum { font-size: 0.7rem; }
+  .admin-cal-count, .admin-cal-flag { font-size: 0.56rem; padding: 1px 5px; }
+  .admin-cal-label { min-width: auto; font-size: 0.92rem; }
+  .admin-cal-weekdays { font-size: 0.58rem; }
 }
