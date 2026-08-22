@@ -35,6 +35,17 @@
   "url": "https://[yourdomain].com/"
 }
 </script>
+<!-- Lets the 3D vehicle preview's loader module resolve "three" to the
+     exact same three.js build it already loads, instead of a duplicate
+     copy — required for GLTFLoader.js (pulled from a CDN that hosts the
+     full package) to share one engine instance with vehicle3d.js. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.185.1/three.module.min.js"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -534,7 +545,6 @@
               <canvas id="vehicle3dCanvas"></canvas>
               <p class="vehicle3d-hint" id="vehicle3dHint" hidden></p>
             </div>
-            <p class="vehicle3d-caption" id="vehicle3dCaption" hidden>Picked automatically from what you typed above — tap a type to change it.</p>
           </div>
           <label>Address / Location
             <input type="text" name="location" placeholder="Where should we come to you?">
