@@ -7,15 +7,19 @@
 // only there to correct a wrong guess — nothing here is required data for
 // the booking itself.
 //
-// The models themselves are real hand-modeled car shapes from Kenney's
-// "Car Kit" (kenney.nl/assets/car-kit, CC0 — free for commercial use, no
-// attribution required), stored locally in /models so there's no dependency
-// on a third-party asset host staying up. If a model fails to load for any
-// reason, we fall back to a simple built-from-code shape (buildProceduralCar
-// below) rather than showing nothing — and if three.js itself can't load at
-// all (slow connection, ad blocker, older browser), the booking form still
-// works fine without any preview. This never blocks or breaks the actual
-// booking.
+// Truck/sedan/coupe are real licensed vehicle models (Ram, 1990 Mercedes
+// 190E Evo II, Lamborghini Countach — bought with commercial-use rights),
+// heavily cut down from their original studio/showroom-detail source files
+// (the Countach alone went from 159 parts and 206k triangles down to ~24k)
+// so they're light enough for a lazy-loaded web widget instead of a
+// close-up render. SUV/van are still Kenney's CC0 Car Kit shapes until
+// their real-model replacements are ready. All of it is stored locally in
+// /models so there's no dependency on a third-party asset host staying up.
+// If a model fails to load for any reason, we fall back to a simple
+// built-from-code shape (buildProceduralCar below) rather than showing
+// nothing — and if three.js itself can't load at all (slow connection, ad
+// blocker, older browser), the booking form still works fine without any
+// preview. This never blocks or breaks the actual booking.
 //
 // Three.js and the GLTF loader load lazily (as ES modules, dynamically
 // imported) only once someone actually has a model to show, so nobody pays
@@ -44,25 +48,56 @@
     van: 'models/car-van.glb',
     coupe: 'models/car-coupe.glb',
   };
-  // These models are modeled small (roughly 2.5-3 units long, 1.1-1.35
-  // tall) with the wheels already resting on local y = 0 — no lift needed,
-  // just a scale up to a comfortable on-screen size.
-  const MODEL_SCALE = 1.3;
+  // Each real model came from a different source (studio CG file, a raw
+  // photo scan, a Roblox export, a 3ds Max export) with its own local
+  // scale, orientation, and resting height, so — unlike the uniform Kenney
+  // kit these all replaced — each type needs its own scale/rotation/lift
+  // figured out by hand from that file's actual geometry:
+  //  - sedan (Benz 190E): already Y-up/Z-forward with wheel-bottom ~y=0,
+  //    close to real-world meters, so barely any correction needed.
+  //  - coupe (Countach): same Y-up/Z-forward convention, but centered on
+  //    its body rather than resting on the ground, so it needs lifting.
+  //  - truck (Ram): looks like a raw single-session photo scan rather than
+  //    a clean CG model (single 394k-triangle mesh, one big baked photo
+  //    texture) — its long axis came in as X instead of the Z everything
+  //    else uses, so it also gets rotated 90° to match.
+  //  - suv (Rezvani): a Roblox export, positioned far from its own origin
+  //    and X-forward — recentered and rotated during conversion.
+  //  - van (Sprinter): a 3ds Max export still in Max's native Z-up axis
+  //    convention — converted to Y-up during conversion (a proper axis
+  //    rotation, not a mirror, so it can't have flipped inside-out).
+  // useRealMaterials means "trust this model's own real paint/texture,
+  // don't override it" — true for all five now that every type is a real
+  // licensed model; PAINT_COLOR below is just a dormant fallback in case a
+  // future swap ever brings back an untextured placeholder shape.
+  const MODEL_TRANSFORM = {
+    sedan: { scale: 0.75, rotY: 0, lift: -0.01, useRealMaterials: true },
+    coupe: { scale: 0.80, rotY: 0, lift: 0.25, useRealMaterials: true },
+    truck: { scale: 3.46, rotY: Math.PI / 2, lift: 1.27, useRealMaterials: true },
+    // Rezvani source file was a Roblox export (already re-centered and its
+    // length axis rotated to match the others during conversion) — same
+    // "best-effort, unverified in this dev environment" caveat as the truck.
+    suv: { scale: 0.25, rotY: Math.PI / 2, lift: 0, useRealMaterials: true },
+    // Sprinter source was a 3ds Max export still in Max's native Z-up axis
+    // convention — already rotated to Y-up during conversion (a proper
+    // rotation, not a mirror, so it can't have flipped the model inside
+    // out), so no extra rotation needed here, just the scale down from
+    // its native (probably cm-ish) units.
+    van: { scale: 0.0093, rotY: 0, lift: 0, useRealMaterials: true },
+  };
+  // NOTE: positioning on the 3 new real models (especially the truck,
+  // which is the least "clean" source file) is a best-effort estimate
+  // computed from the raw files, not something we can see rendered in this
+  // dev environment (no GPU here) — if it looks off-center/floating/rotated
+  // wrong once live, these numbers are the first thing to nudge.
 
-  // The free pack's own texture file wasn't actually included (it points
-  // at an external image that never shipped), so every model would render
-  // flat white with no way to tell them apart. Painting each type a
-  // distinct color both fixes that and makes the five pills read as
-  // obviously different vehicles at a glance. The body and wheels share a
-  // single material in the source file, so this also splits them into two
-  // materials (by node name) rather than painting the wheels the body
-  // color too.
+  // The Kenney pack's own texture file wasn't actually included (it points
+  // at an external image that never shipped), so the still-untextured van
+  // would render flat white with no way to tell it apart from the rest.
+  // Painting it a distinct solid color is the stopgap until its real-model
+  // replacement arrives — see useRealMaterials above.
   const PAINT_COLOR = {
-    sedan: 0x8a1f2b, // deep red
-    suv: 0x1f3a5f, // navy blue
-    truck: 0x2f4a2f, // forest green
     van: 0x3a3a42, // graphite
-    coupe: 0xc9a24c, // gold, echoing the site's own accent color
   };
   const WHEEL_COLOR = 0x161616;
 
@@ -269,21 +304,31 @@
   async function loadRealCar(typeKey) {
     if (modelCache[typeKey]) return modelCache[typeKey];
     if (!GLTFLoaderClass || !MODEL_URL[typeKey]) return null;
+    const xform = MODEL_TRANSFORM[typeKey] || { scale: 1, rotY: 0, lift: 0, useRealMaterials: false };
     const loader = new GLTFLoaderClass();
     const gltf = await loader.loadAsync(MODEL_URL[typeKey]);
     const car = gltf.scene;
-    car.scale.setScalar(MODEL_SCALE);
-    car.position.set(0, 0, 0); // the kit's own wheel-bottom is already at local y = 0
+    car.scale.setScalar(xform.scale);
+    car.rotation.y = xform.rotY;
+    car.position.set(0, xform.lift, 0);
 
-    const bodyMat = new T.MeshStandardMaterial({
-      color: PAINT_COLOR[typeKey] != null ? PAINT_COLOR[typeKey] : 0x2a2a2a,
-      metalness: 0.5, roughness: 0.3, side: T.DoubleSide,
-    });
-    const wheelMat = new T.MeshStandardMaterial({ color: WHEEL_COLOR, metalness: 0.25, roughness: 0.75, side: T.DoubleSide });
-    car.traverse((obj) => {
-      if (!obj.material) return;
-      obj.material = obj.name && obj.name.indexOf('wheel') !== -1 ? wheelMat : bodyMat;
-    });
+    if (!xform.useRealMaterials) {
+      // Still-Kenney-kit types (suv/van, for now) have no real paint of
+      // their own — paint them a flat color per type instead, same as
+      // before, so they're at least visually distinct from each other.
+      const bodyMat = new T.MeshStandardMaterial({
+        color: PAINT_COLOR[typeKey] != null ? PAINT_COLOR[typeKey] : 0x2a2a2a,
+        metalness: 0.5, roughness: 0.3, side: T.DoubleSide,
+      });
+      const wheelMat = new T.MeshStandardMaterial({ color: WHEEL_COLOR, metalness: 0.25, roughness: 0.75, side: T.DoubleSide });
+      car.traverse((obj) => {
+        if (!obj.material) return;
+        obj.material = obj.name && obj.name.indexOf('wheel') !== -1 ? wheelMat : bodyMat;
+      });
+    }
+    // Real licensed models (sedan/coupe/truck) keep whatever material the
+    // file itself came with — that's the actual paint/texture we paid for,
+    // no reason to paper over it with a flat color.
 
     modelCache[typeKey] = car;
     return car;
