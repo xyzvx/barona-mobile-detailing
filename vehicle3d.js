@@ -44,10 +44,27 @@
     van: 'models/car-van.glb',
     coupe: 'models/car-coupe.glb',
   };
-  // These models are modeled small (~2.5-3 units long) with the wheels'
-  // contact patch at local y = -1. This scales and lifts each one to sit on
-  // the scene's ground plane at roughly the size the camera is framed for.
-  const MODEL_SCALE = 1.75;
+  // These models are modeled small (roughly 2.5-3 units long, 1.1-1.35
+  // tall) with the wheels already resting on local y = 0 — no lift needed,
+  // just a scale up to a comfortable on-screen size.
+  const MODEL_SCALE = 1.3;
+
+  // The free pack's own texture file wasn't actually included (it points
+  // at an external image that never shipped), so every model would render
+  // flat white with no way to tell them apart. Painting each type a
+  // distinct color both fixes that and makes the five pills read as
+  // obviously different vehicles at a glance. The body and wheels share a
+  // single material in the source file, so this also splits them into two
+  // materials (by node name) rather than painting the wheels the body
+  // color too.
+  const PAINT_COLOR = {
+    sedan: 0x8a1f2b, // deep red
+    suv: 0x1f3a5f, // navy blue
+    truck: 0x2f4a2f, // forest green
+    van: 0x3a3a42, // graphite
+    coupe: 0xc9a24c, // gold, echoing the site's own accent color
+  };
+  const WHEEL_COLOR = 0x161616;
 
   // Cheap keyword guesser so the 3D preview can pick itself as soon as
   // someone types their vehicle in, instead of making them tap a button.
@@ -256,7 +273,18 @@
     const gltf = await loader.loadAsync(MODEL_URL[typeKey]);
     const car = gltf.scene;
     car.scale.setScalar(MODEL_SCALE);
-    car.position.y = MODEL_SCALE; // the kit's wheels sit at local y = -1
+    car.position.set(0, 0, 0); // the kit's own wheel-bottom is already at local y = 0
+
+    const bodyMat = new T.MeshStandardMaterial({
+      color: PAINT_COLOR[typeKey] != null ? PAINT_COLOR[typeKey] : 0x2a2a2a,
+      metalness: 0.5, roughness: 0.3, side: T.DoubleSide,
+    });
+    const wheelMat = new T.MeshStandardMaterial({ color: WHEEL_COLOR, metalness: 0.25, roughness: 0.75, side: T.DoubleSide });
+    car.traverse((obj) => {
+      if (!obj.material) return;
+      obj.material = obj.name && obj.name.indexOf('wheel') !== -1 ? wheelMat : bodyMat;
+    });
+
     modelCache[typeKey] = car;
     return car;
   }
@@ -412,7 +440,7 @@
     const height = canvas.clientHeight || 188;
     camera = new T.PerspectiveCamera(32, width / height, 0.1, 100);
     camera.position.set(5.5, 2.6, 6.5);
-    camera.lookAt(0, 0.6, 0);
+    camera.lookAt(0, 0.75, 0);
 
     renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
