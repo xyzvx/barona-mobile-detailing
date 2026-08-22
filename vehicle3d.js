@@ -415,7 +415,18 @@
     // no reason to paper over it with a flat color. On top of that, give
     // every real model its "fresh out of the detail bay" clearcoat finish
     // (and the sedan its actual paint color) — see applyLuxuryFinish above.
-    if (xform.useRealMaterials) applyLuxuryFinish(car, typeKey);
+    // This is purely cosmetic polish on top of an already-successfully-
+    // loaded model, so it must never be able to take the whole model down
+    // with it — if anything in here throws, log it and keep the real,
+    // unpolished model instead of falling all the way back to the boxy
+    // procedural placeholder.
+    if (xform.useRealMaterials) {
+      try {
+        applyLuxuryFinish(car, typeKey);
+      } catch (err) {
+        console.warn('[vehicle3d] luxury finish pass failed for', typeKey, err);
+      }
+    }
 
     modelCache[typeKey] = car;
     return car;
@@ -642,6 +653,7 @@
     try {
       car = await loadRealCar(typeKey);
     } catch (err) {
+      console.warn('[vehicle3d] real model load failed for', typeKey, '— falling back to the procedural shape:', err);
       car = null; // fall through to the procedural shape below
     }
     if (myToken !== loadToken) return; // a newer pill was tapped meanwhile
